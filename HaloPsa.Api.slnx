@@ -9,8 +9,10 @@
     <File Path=".gitignore" />
     <File Path="CHANGELOG.md" />
     <File Path="dotnet.config" />
+    <File Path="global.json" />
     <File Path="HaloPsa.Api.dic" />
     <File Path="LICENSE" />
+    <File Path="Publish.ps1" />
     <File Path="README.md" />
     <File Path="version.json" />
   </Folder>
