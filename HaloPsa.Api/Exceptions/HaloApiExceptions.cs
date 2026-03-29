@@ -409,6 +409,18 @@ public class HaloBadRequestException : HaloApiException
 	}
 
 	/// <summary>
+	/// Initializes a new instance of the HaloBadRequestException class with validation errors and error context
+	/// </summary>
+	/// <param name="message">The message that describes the error</param>
+	/// <param name="validationErrors">Validation errors from the API</param>
+	/// <param name="errorContext">Additional error context information</param>
+	public HaloBadRequestException(string message, IReadOnlyList<string>? validationErrors, HaloApiErrorContext errorContext)
+		: base(message, errorContext)
+	{
+		ValidationErrors = validationErrors;
+	}
+
+	/// <summary>
 	/// Initializes a new instance of the HaloBadRequestException class with detailed error information
 	/// </summary>
 	/// <param name="message">The message that describes the error</param>
@@ -582,6 +594,15 @@ public class HaloServerException : HaloApiException
 	/// <param name="message">The message that describes the error</param>
 	/// <param name="statusCode">The HTTP status code associated with the error</param>
 	public HaloServerException(string message, int statusCode) : base(message, statusCode)
+	{
+	}
+
+	/// <summary>
+	/// Initializes a new instance of the HaloServerException class with detailed error information
+	/// </summary>
+	/// <param name="message">The message that describes the error</param>
+	/// <param name="errorContext">Additional error context information</param>
+	public HaloServerException(string message, HaloApiErrorContext errorContext) : base(message, errorContext)
 	{
 	}
 

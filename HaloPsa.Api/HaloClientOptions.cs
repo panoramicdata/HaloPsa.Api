@@ -78,6 +78,13 @@ public partial class HaloClientOptions
 
 	internal void Validate()
 	{
+		ValidateRequiredFields();
+		ValidateFormats();
+		ValidateTimings();
+	}
+
+	private void ValidateRequiredFields()
+	{
 		if (string.IsNullOrWhiteSpace(Account))
 		{
 			throw new ArgumentException("Account cannot be null or empty.", nameof(Account));
@@ -92,7 +99,10 @@ public partial class HaloClientOptions
 		{
 			throw new ArgumentException("ClientSecret cannot be null or empty.", nameof(ClientSecret));
 		}
+	}
 
+	private void ValidateFormats()
+	{
 		if (!_guidRegex.IsMatch(ClientId))
 		{
 			throw new FormatException("ClientId must be a valid GUID format (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).");
@@ -102,7 +112,10 @@ public partial class HaloClientOptions
 		{
 			throw new FormatException("ClientSecret must be in the format of two concatenated GUIDs (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).");
 		}
+	}
 
+	private void ValidateTimings()
+	{
 		if (RequestTimeout <= TimeSpan.Zero)
 		{
 			throw new ArgumentException("RequestTimeout must be greater than zero.", nameof(RequestTimeout));

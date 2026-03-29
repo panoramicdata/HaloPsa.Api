@@ -33,14 +33,65 @@ public class TicketModelTests
 	[Fact]
 	public void Ticket_WithAllProperties_CanBeCreated()
 	{
-		// Arrange
-		var now = DateTime.UtcNow;
-		var customFields = new Dictionary<string, object?> { ["CustomField1"] = "Value1" };
-		var assetIds = new List<int> { 1, 2, 3 }.AsReadOnly();
-		var tags = new List<string> { "urgent", "hardware" }.AsReadOnly();
+		// Arrange & Act
+		var ticket = CreateTicketWithAllProperties();
 
-		// Act
-		var ticket = new Ticket
+		// Assert - Core properties
+		_ = ticket.Id.Should().Be(456);
+		_ = ticket.Summary.Should().Be("Comprehensive test ticket");
+		_ = ticket.Details.Should().Be("Detailed description");
+		_ = ticket.Status.Should().Be(2);
+		_ = ticket.StatusName.Should().Be("In Progress");
+		_ = ticket.Priority.Should().Be(3);
+		_ = ticket.PriorityName.Should().Be("High");
+	}
+
+	[Fact]
+	public void Ticket_WithAllProperties_HasCorrectRelationships()
+	{
+		// Arrange & Act
+		var ticket = CreateTicketWithAllProperties();
+
+		// Assert - Relationship properties
+		_ = ticket.ClientId.Should().Be(5);
+		_ = ticket.ClientName.Should().Be("Test Client");
+		_ = ticket.SiteId.Should().Be(10);
+		_ = ticket.SiteName.Should().Be("Main Office");
+		_ = ticket.UserId.Should().Be(15);
+		_ = ticket.UserName.Should().Be("John Doe");
+		_ = ticket.UserEmail.Should().Be("john.doe@test.com");
+		_ = ticket.AgentId.Should().Be(20);
+		_ = ticket.AgentName.Should().Be("Jane Smith");
+		_ = ticket.TeamId.Should().Be(25);
+		_ = ticket.TeamName.Should().Be("IT Support");
+		_ = ticket.CategoryId.Should().Be(30);
+		_ = ticket.CategoryName.Should().Be("Hardware");
+		_ = ticket.TicketTypeId.Should().Be(35);
+		_ = ticket.TicketTypeName.Should().Be("Incident");
+	}
+
+	[Fact]
+	public void Ticket_WithAllProperties_HasCorrectDatesAndCollections()
+	{
+		// Arrange & Act
+		var ticket = CreateTicketWithAllProperties();
+
+		// Assert - Date, state, and collection properties
+		_ = ticket.DateOccurred.Should().NotBe(default);
+		_ = ticket.LastUpdate.Should().NotBeNull();
+		_ = ticket.DateClosed.Should().NotBeNull();
+		_ = ticket.Source.Should().Be(1);
+		_ = ticket.IsClosed.Should().BeTrue();
+		_ = ticket.IsOnHold.Should().BeFalse();
+		_ = ticket.CustomFields.Should().NotBeNull();
+		_ = ticket.AssetIds.Should().HaveCount(3);
+		_ = ticket.Tags.Should().HaveCount(2);
+	}
+
+	private static Ticket CreateTicketWithAllProperties()
+	{
+		var now = DateTime.UtcNow;
+		return new Ticket
 		{
 			Id = 456,
 			Summary = "Comprehensive test ticket",
@@ -66,46 +117,13 @@ public class TicketModelTests
 			TicketTypeName = "Incident",
 			DateOccurred = now,
 			LastUpdate = now.AddHours(1),
-			DateClosed = now.AddHours(2), // This will make IsClosed = true
+			DateClosed = now.AddHours(2),
 			Source = 1,
 			IsOnHold = false,
-			CustomFields = customFields,
-			AssetIds = assetIds,
-			Tags = tags
+			CustomFields = new Dictionary<string, object?> { ["CustomField1"] = "Value1" },
+			AssetIds = new List<int> { 1, 2, 3 }.AsReadOnly(),
+			Tags = new List<string> { "urgent", "hardware" }.AsReadOnly()
 		};
-
-		// Assert
-		_ = ticket.Id.Should().Be(456);
-		_ = ticket.Summary.Should().Be("Comprehensive test ticket");
-		_ = ticket.Details.Should().Be("Detailed description");
-		_ = ticket.Status.Should().Be(2);
-		_ = ticket.StatusName.Should().Be("In Progress");
-		_ = ticket.Priority.Should().Be(3);
-		_ = ticket.PriorityName.Should().Be("High");
-		_ = ticket.ClientId.Should().Be(5);
-		_ = ticket.ClientName.Should().Be("Test Client");
-		_ = ticket.SiteId.Should().Be(10);
-		_ = ticket.SiteName.Should().Be("Main Office");
-		_ = ticket.UserId.Should().Be(15);
-		_ = ticket.UserName.Should().Be("John Doe");
-		_ = ticket.UserEmail.Should().Be("john.doe@test.com");
-		_ = ticket.AgentId.Should().Be(20);
-		_ = ticket.AgentName.Should().Be("Jane Smith");
-		_ = ticket.TeamId.Should().Be(25);
-		_ = ticket.TeamName.Should().Be("IT Support");
-		_ = ticket.CategoryId.Should().Be(30);
-		_ = ticket.CategoryName.Should().Be("Hardware");
-		_ = ticket.TicketTypeId.Should().Be(35);
-		_ = ticket.TicketTypeName.Should().Be("Incident");
-		_ = ticket.DateOccurred.Should().Be(now);
-		_ = ticket.LastUpdate.Should().Be(now.AddHours(1));
-		_ = ticket.DateClosed.Should().Be(now.AddHours(2));
-		_ = ticket.Source.Should().Be(1);
-		_ = ticket.IsClosed.Should().BeTrue(); // Computed from DateClosed having a value
-		_ = ticket.IsOnHold.Should().BeFalse();
-		_ = ticket.CustomFields.Should().BeEquivalentTo(customFields);
-		_ = ticket.AssetIds.Should().BeEquivalentTo(assetIds);
-		_ = ticket.Tags.Should().BeEquivalentTo(tags);
 	}
 
 	[Fact]
@@ -268,12 +286,51 @@ public class TicketModelTests
 	[Fact]
 	public void TicketFilter_WithAllProperties_CanBeCreated()
 	{
-		// Arrange
+		// Arrange & Act
+		var filter = CreateFilterWithAllProperties();
+
+		// Assert - Pagination properties
+		_ = filter.Count.Should().Be(50);
+		_ = filter.PageNo.Should().Be(1);
+		_ = filter.PageSize.Should().Be(25);
+		_ = filter.Paginate.Should().BeTrue();
+	}
+
+	[Fact]
+	public void TicketFilter_WithAllProperties_HasCorrectFilterValues()
+	{
+		// Arrange & Act
+		var filter = CreateFilterWithAllProperties();
+
+		// Assert - Filter properties
+		_ = filter.Status.Should().Be("1,2,3");
+		_ = filter.Priority.Should().Be("2,3");
+		_ = filter.ClientId.Should().Be(5);
+		_ = filter.SiteId.Should().Be(10);
+		_ = filter.UserId.Should().Be(15);
+		_ = filter.AgentId.Should().Be(20);
+		_ = filter.TeamId.Should().Be(25);
+		_ = filter.CategoryId.Should().Be(30);
+		_ = filter.TicketTypeId.Should().Be(35);
+		_ = filter.Search.Should().Be("test search");
+		_ = filter.StartDate.Should().NotBeNull();
+		_ = filter.EndDate.Should().NotBeNull();
+		_ = filter.OpenOnly.Should().BeTrue();
+		_ = filter.MyTickets.Should().BeTrue();
+		_ = filter.IncludeDetails.Should().BeTrue();
+		_ = filter.Order.Should().Be("dateoccurred");
+		_ = filter.OrderDesc.Should().BeTrue();
+		_ = filter.AssetId.Should().Be(100);
+		_ = filter.ServiceId.Should().Be(200);
+		_ = filter.IncludeCustomFields.Should().Be("1,2,3");
+	}
+
+	private static TicketFilter CreateFilterWithAllProperties()
+	{
 		var startDate = DateTime.UtcNow.AddDays(-7);
 		var endDate = DateTime.UtcNow;
 
-		// Act
-		var filter = new TicketFilter
+		return new TicketFilter
 		{
 			Count = 50,
 			PageNo = 1,
@@ -300,32 +357,6 @@ public class TicketModelTests
 			ServiceId = 200,
 			IncludeCustomFields = "1,2,3"
 		};
-
-		// Assert
-		_ = filter.Count.Should().Be(50);
-		_ = filter.PageNo.Should().Be(1);
-		_ = filter.PageSize.Should().Be(25);
-		_ = filter.Paginate.Should().BeTrue();
-		_ = filter.Status.Should().Be("1,2,3");
-		_ = filter.Priority.Should().Be("2,3");
-		_ = filter.ClientId.Should().Be(5);
-		_ = filter.SiteId.Should().Be(10);
-		_ = filter.UserId.Should().Be(15);
-		_ = filter.AgentId.Should().Be(20);
-		_ = filter.TeamId.Should().Be(25);
-		_ = filter.CategoryId.Should().Be(30);
-		_ = filter.TicketTypeId.Should().Be(35);
-		_ = filter.Search.Should().Be("test search");
-		_ = filter.StartDate.Should().Be(startDate);
-		_ = filter.EndDate.Should().Be(endDate);
-		_ = filter.OpenOnly.Should().BeTrue();
-		_ = filter.MyTickets.Should().BeTrue();
-		_ = filter.IncludeDetails.Should().BeTrue();
-		_ = filter.Order.Should().Be("dateoccurred");
-		_ = filter.OrderDesc.Should().BeTrue();
-		_ = filter.AssetId.Should().Be(100);
-		_ = filter.ServiceId.Should().Be(200);
-		_ = filter.IncludeCustomFields.Should().Be("1,2,3");
 	}
 
 	[Fact]

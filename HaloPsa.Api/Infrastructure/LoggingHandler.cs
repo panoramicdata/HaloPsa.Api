@@ -39,30 +39,39 @@ internal sealed class LoggingHandler(
 		finally
 		{
 			stopwatch.Stop();
+			LogOutcome(request, response, exception, stopwatch.Elapsed, requestId);
+		}
+	}
 
-			if (logger != null)
-			{
-				if (exception != null)
-				{
-					LogHttpException(request, exception, stopwatch.Elapsed, requestId);
-				}
-				else if (logResponses && response != null)
-				{
-					LogHttpResponse(response, stopwatch.Elapsed, requestId);
-				}
-			}
+	private void LogOutcome(
+		HttpRequestMessage request,
+		HttpResponseMessage? response,
+		Exception? exception,
+		TimeSpan elapsed,
+		string requestId)
+	{
+		if (exception != null)
+		{
+			LogHttpException(request, exception, elapsed, requestId);
+		}
+		else if (logResponses && response != null)
+		{
+			LogHttpResponse(response, elapsed, requestId);
 		}
 	}
 
 	private void LogHttpRequest(HttpRequestMessage request, string requestId)
 	{
-		logger.LogInformation(
-			"[{RequestId}] HTTP {Method} {Uri}",
-			requestId,
-			request.Method,
-			request.RequestUri);
+		if (logger.IsEnabled(LogLevel.Information))
+		{
+			logger.LogInformation(
+				"[{RequestId}] HTTP {Method} {Uri}",
+				requestId,
+				request.Method,
+				request.RequestUri);
+		}
 
-		if (request.Content != null)
+		if (request.Content != null && logger.IsEnabled(LogLevel.Debug))
 		{
 			logger.LogDebug(
 				"[{RequestId}] Request Headers: {Headers}",
@@ -74,14 +83,17 @@ internal sealed class LoggingHandler(
 	private void LogHttpResponse(HttpResponseMessage response, TimeSpan elapsed, string requestId)
 	{
 		var level = response.IsSuccessStatusCode ? LogLevel.Information : LogLevel.Warning;
-		logger.Log(level,
-			"[{RequestId}] HTTP {StatusCode} {ReasonPhrase} in {ElapsedMs}ms",
-			requestId,
-			(int)response.StatusCode,
-			response.ReasonPhrase,
-			elapsed.TotalMilliseconds);
+		if (logger.IsEnabled(level))
+		{
+			logger.Log(level,
+				"[{RequestId}] HTTP {StatusCode} {ReasonPhrase} in {ElapsedMs}ms",
+				requestId,
+				(int)response.StatusCode,
+				response.ReasonPhrase,
+				elapsed.TotalMilliseconds);
+		}
 
-		if (!response.IsSuccessStatusCode)
+		if (!response.IsSuccessStatusCode && logger.IsEnabled(LogLevel.Debug))
 		{
 			logger.LogDebug(
 				"[{RequestId}] Response Headers: {Headers}",
@@ -91,13 +103,11 @@ internal sealed class LoggingHandler(
 	}
 
 	private void LogHttpException(HttpRequestMessage request, Exception exception, TimeSpan elapsed, string requestId)
-	{
-		logger.LogError(exception,
+		=> logger.LogError(exception,
 			"[{RequestId}] HTTP {Method} {Uri} failed after {ElapsedMs}ms: {ErrorMessage}",
 			requestId,
 			request.Method,
 			request.RequestUri,
 			elapsed.TotalMilliseconds,
 			exception.Message);
-	}
 }

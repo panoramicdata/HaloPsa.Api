@@ -146,47 +146,55 @@ internal sealed class AuthenticationHandler : DelegatingHandler
 		_options.Logger?.LogDebug("Refreshing Halo API access token using client credentials");
 		try
 		{
-			var formData = new FormUrlEncodedContent(new Dictionary<string, string>
-			{
-				["grant_type"] = "client_credentials",
-				["client_id"] = _options.ClientId,
-				["client_secret"] = _options.ClientSecret,
-				["scope"] = "all"
-			});
-
-			// Use the separate auth client to avoid circular dependencies
-			var response = await _authHttpClient.PostAsync("/auth/token", formData, cancellationToken).ConfigureAwait(false);
-
-			if (!response.IsSuccessStatusCode)
-			{
-				var errorContent = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-				_options.Logger?.LogError("Authentication failed: {StatusCode} - {Content}", response.StatusCode, errorContent);
-				throw new AuthenticationException(
-					$"Failed to obtain access token. Status: {response.StatusCode}, Content: {errorContent}");
-			}
-
-			var responseContent = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-
-			// Log the raw response for debugging
-			_options.Logger?.LogDebug("Token response: {Response}", responseContent);
-
-			var tokenResponse = JsonSerializer.Deserialize<TokenResponse>(responseContent, _jsonSerializerOptions);
-
-			if (tokenResponse == null || string.IsNullOrEmpty(tokenResponse.AccessToken))
-			{
-				throw new AuthenticationException($"Invalid token response received from Halo API. Response: {responseContent}");
-			}
-
+			var tokenResponse = await RequestTokenAsync(cancellationToken).ConfigureAwait(false);
 			_accessToken = tokenResponse.AccessToken;
 			_tokenExpiry = DateTime.UtcNow.AddSeconds(tokenResponse.ExpiresIn - 60); // 60-second buffer
 
-			_options.Logger?.LogDebug("Successfully refreshed Halo API access token, expires at {Expiry}", _tokenExpiry);
+			if (_options.Logger?.IsEnabled(LogLevel.Debug) == true)
+			{
+				_options.Logger.LogDebug("Successfully refreshed Halo API access token, expires at {Expiry}", _tokenExpiry);
+			}
 		}
 		catch (Exception ex) when (ex is not AuthenticationException)
 		{
 			_options.Logger?.LogError(ex, "Failed to refresh Halo API access token");
 			throw new AuthenticationException("Failed to obtain access token from Halo API", ex);
 		}
+	}
+
+	private async Task<TokenResponse> RequestTokenAsync(CancellationToken cancellationToken)
+	{
+		var formData = new FormUrlEncodedContent(new Dictionary<string, string>
+		{
+			["grant_type"] = "client_credentials",
+			["client_id"] = _options.ClientId,
+			["client_secret"] = _options.ClientSecret,
+			["scope"] = "all"
+		});
+
+		var response = await _authHttpClient.PostAsync("/auth/token", formData, cancellationToken).ConfigureAwait(false);
+
+		if (!response.IsSuccessStatusCode)
+		{
+			var errorContent = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+			_options.Logger?.LogError("Authentication failed: {StatusCode} - {Content}", response.StatusCode, errorContent);
+			throw new AuthenticationException(
+				$"Failed to obtain access token. Status: {response.StatusCode}, Content: {errorContent}");
+		}
+
+		var responseContent = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+		if (_options.Logger?.IsEnabled(LogLevel.Debug) == true)
+		{
+			_options.Logger.LogDebug("Token response: {Response}", responseContent);
+		}
+
+		var tokenResponse = JsonSerializer.Deserialize<TokenResponse>(responseContent, _jsonSerializerOptions)
+			?? throw new AuthenticationException($"Invalid token response received from Halo API. Response: {responseContent}");
+
+		return !string.IsNullOrEmpty(tokenResponse.AccessToken)
+			? tokenResponse
+			: throw new AuthenticationException($"Invalid token response received from Halo API. Response: {responseContent}");
 	}
 
 	protected override void Dispose(bool disposing)

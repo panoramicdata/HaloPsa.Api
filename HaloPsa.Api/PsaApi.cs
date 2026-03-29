@@ -2,6 +2,7 @@
 using HaloPsa.Api.Infrastructure;
 using HaloPsa.Api.Interfaces;
 using Refit;
+using System.Collections.ObjectModel;
 using System.Text.Json;
 
 namespace HaloPsa.Api;
@@ -32,7 +33,7 @@ internal sealed class PsaApi(HttpClient _httpClient) : IPsaApi
 	{
 		if (httpResponseMessage.IsSuccessStatusCode)
 		{
-			return null; // No exception for successful responses
+			return null;
 		}
 
 		var statusCode = (int)httpResponseMessage.StatusCode;
@@ -40,118 +41,96 @@ internal sealed class PsaApi(HttpClient _httpClient) : IPsaApi
 		var requestUrl = httpResponseMessage.RequestMessage?.RequestUri?.ToString();
 		var requestMethod = httpResponseMessage.RequestMessage?.Method.Method;
 
-		// Try to parse error details from response content
-		Dictionary<string, object?>? details = null;
-		IReadOnlyList<string>? validationErrors = null;
-		string? content = null;
+		var (details, validationErrors) = await ParseResponseContentAsync(httpResponseMessage);
 
+		var errorContext = new HaloApiErrorContext
+		{
+			StatusCode = statusCode,
+			Details = details,
+			RequestUrl = requestUrl,
+			RequestMethod = requestMethod
+		};
+
+		return CreateExceptionForStatusCode(
+			statusCode, message, validationErrors,
+			requestUrl, httpResponseMessage, errorContext);
+	}
+
+	/// <summary>
+	/// Parses error details and validation errors from HTTP response content
+	/// </summary>
+	private static async Task<(Dictionary<string, object?>? Details, ReadOnlyCollection<string>? ValidationErrors)> ParseResponseContentAsync(
+		HttpResponseMessage httpResponseMessage)
+	{
+		string? content = null;
 		try
 		{
 			content = await httpResponseMessage.Content.ReadAsStringAsync();
-			if (!string.IsNullOrEmpty(content))
+			if (string.IsNullOrEmpty(content))
 			{
-				var jsonDoc = JsonDocument.Parse(content);
-				details = ExtractErrorDetails(jsonDoc.RootElement);
-
-				// Extract validation errors if present
-				if (jsonDoc.RootElement.TryGetProperty("errors", out var errorsElement))
-				{
-					var errorsList = new List<string>();
-					if (errorsElement.ValueKind == JsonValueKind.Array)
-					{
-						foreach (var error in errorsElement.EnumerateArray())
-						{
-							if (error.ValueKind == JsonValueKind.String)
-							{
-								errorsList.Add(error.GetString() ?? string.Empty);
-							}
-						}
-					}
-
-					validationErrors = errorsList.AsReadOnly();
-				}
+				return (null, null);
 			}
+
+			var jsonDoc = JsonDocument.Parse(content);
+			var details = ExtractErrorDetails(jsonDoc.RootElement);
+			var validationErrors = ExtractValidationErrors(jsonDoc.RootElement);
+			return (details, validationErrors);
 		}
 		catch (JsonException)
 		{
-			// If we can't parse the JSON, just use the raw content
-			details = new Dictionary<string, object?> { ["rawContent"] = content };
+			return (new Dictionary<string, object?> { ["rawContent"] = content }, null);
+		}
+	}
+
+	/// <summary>
+	/// Extracts validation errors from a JSON element's "errors" property
+	/// </summary>
+	private static ReadOnlyCollection<string>? ExtractValidationErrors(JsonElement rootElement)
+	{
+		if (!rootElement.TryGetProperty("errors", out var errorsElement))
+		{
+			return null;
 		}
 
-		// Map status codes to specific exception types
-		return statusCode switch
+		if (errorsElement.ValueKind != JsonValueKind.Array)
 		{
-			400 => new HaloBadRequestException(
-				message: $"Bad request: {message}",
-				validationErrors: validationErrors,
-				statusCode: statusCode,
-				errorCode: null,
-				details: details,
-				requestUrl: requestUrl,
-				requestMethod: requestMethod,
-				innerException: null),
+			return null;
+		}
 
-			401 => new HaloAuthenticationException(
-				message: $"Authentication failed: {message}",
-				statusCode: statusCode,
-				errorCode: null,
-				details: details,
-				requestUrl: requestUrl,
-				requestMethod: requestMethod,
-				innerException: null),
+		var errorsList = new List<string>();
+		foreach (var error in errorsElement.EnumerateArray())
+		{
+			if (error.ValueKind == JsonValueKind.String)
+			{
+				errorsList.Add(error.GetString() ?? string.Empty);
+			}
+		}
 
-			403 => new HaloAuthorizationException(
-				message: $"Authorization failed: {message}",
-				statusCode: statusCode,
-				errorCode: null,
-				details: details,
-				requestUrl: requestUrl,
-				requestMethod: requestMethod,
-				innerException: null),
-
-			404 => new HaloNotFoundException(
-				message: $"Resource not found: {message}",
-				resourceType: ExtractResourceTypeFromUrl(requestUrl),
-				resourceId: ExtractResourceIdFromUrl(requestUrl),
-				statusCode: statusCode,
-				errorCode: null,
-				details: details,
-				requestUrl: requestUrl,
-				requestMethod: requestMethod,
-				innerException: null),
-
-			429 => new HaloRateLimitException(
-				message: $"Rate limit exceeded: {message}",
-				retryAfterSeconds: ExtractRetryAfterSeconds(httpResponseMessage),
-				rateLimit: null,
-				remainingRequests: null,
-				resetTime: null,
-				statusCode: statusCode,
-				errorCode: null,
-				details: details,
-				requestUrl: requestUrl,
-				requestMethod: requestMethod,
-				innerException: null),
-
-			>= 500 => new HaloServerException(
-				message: $"Server error: {message}",
-				statusCode: statusCode,
-				errorCode: null,
-				details: details,
-				requestUrl: requestUrl,
-				requestMethod: requestMethod,
-				innerException: null),
-
-			_ => new HaloApiException(
-				message: $"API error: {message}",
-				statusCode: statusCode,
-				errorCode: null,
-				details: details,
-				requestUrl: requestUrl,
-				requestMethod: requestMethod,
-				innerException: null)
-		};
+		return errorsList.AsReadOnly();
 	}
+
+	/// <summary>
+	/// Creates the appropriate HaloApiException subclass based on HTTP status code
+	/// </summary>
+	private static HaloApiException CreateExceptionForStatusCode(
+		int statusCode,
+		string message,
+		ReadOnlyCollection<string>? validationErrors,
+		string? requestUrl,
+		HttpResponseMessage httpResponseMessage,
+		HaloApiErrorContext errorContext)
+		=> statusCode switch
+		{
+			400 => new HaloBadRequestException($"Bad request: {message}", validationErrors, errorContext),
+			401 => new HaloAuthenticationException($"Authentication failed: {message}", errorContext),
+			403 => new HaloAuthorizationException($"Authorization failed: {message}", errorContext),
+			404 => new HaloNotFoundException($"Resource not found: {message}",
+				ExtractResourceTypeFromUrl(requestUrl), ExtractResourceIdFromUrl(requestUrl), errorContext),
+			429 => new HaloRateLimitException($"Rate limit exceeded: {message}",
+				ExtractRetryAfterSeconds(httpResponseMessage), null, null, null, errorContext),
+			>= 500 => new HaloServerException($"Server error: {message}", errorContext),
+			_ => new HaloApiException($"API error: {message}", errorContext)
+		};
 
 	/// <summary>
 	/// Extracts error details from JSON response
