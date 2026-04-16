@@ -10,7 +10,7 @@ namespace HaloPsa.Api.Infrastructure;
 /// <summary>
 /// HTTP message handler that converts Refit API exceptions to HaloApiExceptions
 /// </summary>
-internal sealed class ErrorHandler(ILogger? logger) : DelegatingHandler
+internal sealed partial class ErrorHandler(ILogger? logger) : DelegatingHandler
 {
 	private readonly ILogger _logger = logger ?? NullLogger.Instance;
 
@@ -29,8 +29,7 @@ internal sealed class ErrorHandler(ILogger? logger) : DelegatingHandler
 		}
 		catch (ApiException apiException)
 		{
-			_logger.LogError(apiException, "API exception occurred: {StatusCode} {ReasonPhrase}",
-				apiException.StatusCode, apiException.ReasonPhrase);
+			LogApiException(_logger, apiException, apiException.StatusCode, apiException.ReasonPhrase);
 
 			// Convert Refit ApiException to appropriate HaloApiException
 			var haloException = ConvertToHaloApiException(apiException, request);
@@ -38,7 +37,7 @@ internal sealed class ErrorHandler(ILogger? logger) : DelegatingHandler
 		}
 		catch (Exception ex)
 		{
-			_logger.LogError(ex, "Unexpected error occurred during HTTP request to {RequestUri}", request.RequestUri);
+			LogUnexpectedError(_logger, ex, request.RequestUri);
 			throw;
 		}
 	}
@@ -251,4 +250,10 @@ internal sealed class ErrorHandler(ILogger? logger) : DelegatingHandler
 
 		return null;
 	}
+
+	[LoggerMessage(LogLevel.Error, "API exception occurred: {StatusCode} {ReasonPhrase}")]
+	private static partial void LogApiException(ILogger logger, Exception ex, System.Net.HttpStatusCode statusCode, string? reasonPhrase);
+
+	[LoggerMessage(LogLevel.Error, "Unexpected error occurred during HTTP request to {RequestUri}")]
+	private static partial void LogUnexpectedError(ILogger logger, Exception ex, Uri? requestUri);
 }

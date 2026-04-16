@@ -6,7 +6,7 @@ namespace HaloPsa.Api.Infrastructure;
 /// <summary>
 /// HTTP message handler that provides logging capabilities for requests and responses
 /// </summary>
-internal sealed class LoggingHandler(
+internal sealed partial class LoggingHandler(
 	ILogger logger,
 	bool logRequests,
 	bool logResponses) : DelegatingHandler
@@ -64,19 +64,12 @@ internal sealed class LoggingHandler(
 	{
 		if (logger.IsEnabled(LogLevel.Information))
 		{
-			logger.LogInformation(
-				"[{RequestId}] HTTP {Method} {Uri}",
-				requestId,
-				request.Method,
-				request.RequestUri);
+			LogRequest(logger, requestId, request.Method, request.RequestUri);
 		}
 
 		if (request.Content != null && logger.IsEnabled(LogLevel.Debug))
 		{
-			logger.LogDebug(
-				"[{RequestId}] Request Headers: {Headers}",
-				requestId,
-				string.Join(", ", request.Headers.Select(h => $"{h.Key}: {string.Join(", ", h.Value)}")));
+			LogRequestHeaders(logger, requestId, string.Join(", ", request.Headers.Select(h => $"{h.Key}: {string.Join(", ", h.Value)}")));
 		}
 	}
 
@@ -85,29 +78,36 @@ internal sealed class LoggingHandler(
 		var level = response.IsSuccessStatusCode ? LogLevel.Information : LogLevel.Warning;
 		if (logger.IsEnabled(level))
 		{
-			logger.Log(level,
-				"[{RequestId}] HTTP {StatusCode} {ReasonPhrase} in {ElapsedMs}ms",
-				requestId,
-				(int)response.StatusCode,
-				response.ReasonPhrase,
-				elapsed.TotalMilliseconds);
+			if (response.IsSuccessStatusCode)
+				LogResponseSuccess(logger, requestId, (int)response.StatusCode, response.ReasonPhrase, elapsed.TotalMilliseconds);
+			else
+				LogResponseFailure(logger, requestId, (int)response.StatusCode, response.ReasonPhrase, elapsed.TotalMilliseconds);
 		}
 
 		if (!response.IsSuccessStatusCode && logger.IsEnabled(LogLevel.Debug))
 		{
-			logger.LogDebug(
-				"[{RequestId}] Response Headers: {Headers}",
-				requestId,
-				string.Join(", ", response.Headers.Select(h => $"{h.Key}: {string.Join(", ", h.Value)}")));
+			LogResponseHeaders(logger, requestId, string.Join(", ", response.Headers.Select(h => $"{h.Key}: {string.Join(", ", h.Value)}")));
 		}
 	}
 
 	private void LogHttpException(HttpRequestMessage request, Exception exception, TimeSpan elapsed, string requestId)
-		=> logger.LogError(exception,
-			"[{RequestId}] HTTP {Method} {Uri} failed after {ElapsedMs}ms: {ErrorMessage}",
-			requestId,
-			request.Method,
-			request.RequestUri,
-			elapsed.TotalMilliseconds,
-			exception.Message);
+		=> LogException(logger, exception, requestId, request.Method, request.RequestUri, elapsed.TotalMilliseconds, exception.Message);
+
+	[LoggerMessage(LogLevel.Information, "[{RequestId}] HTTP {Method} {Uri}")]
+	private static partial void LogRequest(ILogger logger, string requestId, HttpMethod method, Uri? uri);
+
+	[LoggerMessage(LogLevel.Debug, "[{RequestId}] Request Headers: {Headers}")]
+	private static partial void LogRequestHeaders(ILogger logger, string requestId, string headers);
+
+	[LoggerMessage(LogLevel.Information, "[{RequestId}] HTTP {StatusCode} {ReasonPhrase} in {ElapsedMs}ms")]
+	private static partial void LogResponseSuccess(ILogger logger, string requestId, int statusCode, string? reasonPhrase, double elapsedMs);
+
+	[LoggerMessage(LogLevel.Warning, "[{RequestId}] HTTP {StatusCode} {ReasonPhrase} in {ElapsedMs}ms")]
+	private static partial void LogResponseFailure(ILogger logger, string requestId, int statusCode, string? reasonPhrase, double elapsedMs);
+
+	[LoggerMessage(LogLevel.Debug, "[{RequestId}] Response Headers: {Headers}")]
+	private static partial void LogResponseHeaders(ILogger logger, string requestId, string headers);
+
+	[LoggerMessage(LogLevel.Error, "[{RequestId}] HTTP {Method} {Uri} failed after {ElapsedMs}ms: {ErrorMessage}")]
+	private static partial void LogException(ILogger logger, Exception ex, string requestId, HttpMethod method, Uri? uri, double elapsedMs, string errorMessage);
 }

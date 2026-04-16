@@ -8,7 +8,7 @@ namespace HaloPsa.Api.Infrastructure;
 /// <summary>
 /// HTTP message handler that manages OAuth2 authentication for Halo API requests using client credentials flow
 /// </summary>
-internal sealed class AuthenticationHandler : DelegatingHandler
+internal sealed partial class AuthenticationHandler : DelegatingHandler
 {
 	private static readonly JsonSerializerOptions _jsonSerializerOptions = new()
 	{
@@ -58,7 +58,8 @@ internal sealed class AuthenticationHandler : DelegatingHandler
 		// If we get a 401, try to refresh the token once
 		if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized && !string.IsNullOrEmpty(_accessToken))
 		{
-			_options.Logger?.LogWarning("Received 401 Unauthorized, attempting to refresh token");
+			if (_options.Logger != null)
+				LogUnauthorizedRefresh(_options.Logger);
 
 			// Clear the current token and get a new one
 			_accessToken = null;
@@ -143,7 +144,8 @@ internal sealed class AuthenticationHandler : DelegatingHandler
 
 	private async Task RefreshTokenAsync(CancellationToken cancellationToken)
 	{
-		_options.Logger?.LogDebug("Refreshing Halo API access token using client credentials");
+		if (_options.Logger != null)
+			LogRefreshingToken(_options.Logger);
 		try
 		{
 			var tokenResponse = await RequestTokenAsync(cancellationToken).ConfigureAwait(false);
@@ -152,12 +154,13 @@ internal sealed class AuthenticationHandler : DelegatingHandler
 
 			if (_options.Logger?.IsEnabled(LogLevel.Debug) == true)
 			{
-				_options.Logger.LogDebug("Successfully refreshed Halo API access token, expires at {Expiry}", _tokenExpiry);
+				LogTokenRefreshed(_options.Logger, _tokenExpiry);
 			}
 		}
 		catch (Exception ex) when (ex is not AuthenticationException)
 		{
-			_options.Logger?.LogError(ex, "Failed to refresh Halo API access token");
+			if (_options.Logger != null)
+				LogTokenRefreshFailed(_options.Logger, ex);
 			throw new AuthenticationException("Failed to obtain access token from Halo API", ex);
 		}
 	}
@@ -177,7 +180,8 @@ internal sealed class AuthenticationHandler : DelegatingHandler
 		if (!response.IsSuccessStatusCode)
 		{
 			var errorContent = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-			_options.Logger?.LogError("Authentication failed: {StatusCode} - {Content}", response.StatusCode, errorContent);
+			if (_options.Logger != null)
+				LogAuthFailed(_options.Logger, response.StatusCode, errorContent);
 			throw new AuthenticationException(
 				$"Failed to obtain access token. Status: {response.StatusCode}, Content: {errorContent}");
 		}
@@ -186,7 +190,7 @@ internal sealed class AuthenticationHandler : DelegatingHandler
 
 		if (_options.Logger?.IsEnabled(LogLevel.Debug) == true)
 		{
-			_options.Logger.LogDebug("Token response: {Response}", responseContent);
+			LogTokenResponse(_options.Logger, responseContent);
 		}
 
 		var tokenResponse = JsonSerializer.Deserialize<TokenResponse>(responseContent, _jsonSerializerOptions)
@@ -219,6 +223,24 @@ internal sealed class AuthenticationHandler : DelegatingHandler
 		[JsonPropertyName("expires_in")]
 		public int ExpiresIn { get; init; }
 	}
+
+	[LoggerMessage(LogLevel.Warning, "Received 401 Unauthorized, attempting to refresh token")]
+	private static partial void LogUnauthorizedRefresh(ILogger logger);
+
+	[LoggerMessage(LogLevel.Debug, "Refreshing Halo API access token using client credentials")]
+	private static partial void LogRefreshingToken(ILogger logger);
+
+	[LoggerMessage(LogLevel.Debug, "Successfully refreshed Halo API access token, expires at {Expiry}")]
+	private static partial void LogTokenRefreshed(ILogger logger, DateTime expiry);
+
+	[LoggerMessage(LogLevel.Error, "Failed to refresh Halo API access token")]
+	private static partial void LogTokenRefreshFailed(ILogger logger, Exception ex);
+
+	[LoggerMessage(LogLevel.Error, "Authentication failed: {StatusCode} - {Content}")]
+	private static partial void LogAuthFailed(ILogger logger, System.Net.HttpStatusCode statusCode, string content);
+
+	[LoggerMessage(LogLevel.Debug, "Token response: {Response}")]
+	private static partial void LogTokenResponse(ILogger logger, string response);
 }
 
 /// <summary>

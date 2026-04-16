@@ -7,7 +7,7 @@ namespace HaloPsa.Api.Infrastructure;
 /// <summary>
 /// HTTP message handler that implements retry logic with exponential backoff
 /// </summary>
-internal sealed class RetryHandler(
+internal sealed partial class RetryHandler(
 	int maxRetryAttempts,
 	TimeSpan retryDelay,
 	bool useExponentialBackoff,
@@ -86,11 +86,7 @@ internal sealed class RetryHandler(
 	{
 		if (attempt > 0 && _logger?.IsEnabled(LogLevel.Information) == true)
 		{
-			_logger.LogInformation(
-				"HTTP request succeeded on attempt {Attempt} for {Method} {Uri}",
-				attempt + 1,
-				request.Method,
-				request.RequestUri);
+			LogSuccessOnRetry(_logger, attempt + 1, request.Method, request.RequestUri);
 		}
 	}
 
@@ -98,12 +94,7 @@ internal sealed class RetryHandler(
 	{
 		if (_logger?.IsEnabled(LogLevel.Warning) == true)
 		{
-			_logger.LogWarning(
-				"HTTP request failed after {MaxAttempts} attempts for {Method} {Uri} with status {StatusCode}",
-				_maxRetryAttempts + 1,
-				request.Method,
-				request.RequestUri,
-				statusCode);
+			LogFinalFailureStatus(_logger, _maxRetryAttempts + 1, request.Method, request.RequestUri, statusCode);
 		}
 
 		return new HttpResponseMessage(statusCode)
@@ -117,13 +108,7 @@ internal sealed class RetryHandler(
 	{
 		if (_logger?.IsEnabled(LogLevel.Warning) == true)
 		{
-			_logger.LogWarning(
-				"HTTP request failed on attempt {Attempt}, retrying in {Delay}ms for {Method} {Uri} (Status: {StatusCode})",
-				attempt + 1,
-				CalculateDelay(attempt).TotalMilliseconds,
-				request.Method,
-				request.RequestUri,
-				statusCode);
+			LogRetryAttemptStatus(_logger, attempt + 1, CalculateDelay(attempt).TotalMilliseconds, request.Method, request.RequestUri, statusCode);
 		}
 	}
 
@@ -131,11 +116,7 @@ internal sealed class RetryHandler(
 	{
 		if (_logger?.IsEnabled(LogLevel.Error) == true)
 		{
-			_logger.LogError(ex,
-				"HTTP request failed after {MaxAttempts} attempts for {Method} {Uri}",
-				_maxRetryAttempts + 1,
-				request.Method,
-				request.RequestUri);
+			LogFinalFailureException(_logger, ex, _maxRetryAttempts + 1, request.Method, request.RequestUri);
 		}
 	}
 
@@ -143,12 +124,7 @@ internal sealed class RetryHandler(
 	{
 		if (_logger?.IsEnabled(LogLevel.Warning) == true)
 		{
-			_logger.LogWarning(ex,
-				"HTTP request failed on attempt {Attempt}, retrying in {Delay}ms for {Method} {Uri}",
-				attempt + 1,
-				CalculateDelay(attempt).TotalMilliseconds,
-				request.Method,
-				request.RequestUri);
+			LogRetryAfterException(_logger, ex, attempt + 1, CalculateDelay(attempt).TotalMilliseconds, request.Method, request.RequestUri);
 		}
 	}
 
@@ -169,4 +145,19 @@ internal sealed class RetryHandler(
 
 	private static bool IsRetryableException(Exception ex)
 		=> ex is HttpRequestException or TaskCanceledException or SocketException;
+
+	[LoggerMessage(LogLevel.Information, "HTTP request succeeded on attempt {Attempt} for {Method} {Uri}")]
+	private static partial void LogSuccessOnRetry(ILogger logger, int attempt, HttpMethod method, Uri? uri);
+
+	[LoggerMessage(LogLevel.Warning, "HTTP request failed after {MaxAttempts} attempts for {Method} {Uri} with status {StatusCode}")]
+	private static partial void LogFinalFailureStatus(ILogger logger, int maxAttempts, HttpMethod method, Uri? uri, HttpStatusCode statusCode);
+
+	[LoggerMessage(LogLevel.Warning, "HTTP request failed on attempt {Attempt}, retrying in {Delay}ms for {Method} {Uri} (Status: {StatusCode})")]
+	private static partial void LogRetryAttemptStatus(ILogger logger, int attempt, double delay, HttpMethod method, Uri? uri, HttpStatusCode statusCode);
+
+	[LoggerMessage(LogLevel.Error, "HTTP request failed after {MaxAttempts} attempts for {Method} {Uri}")]
+	private static partial void LogFinalFailureException(ILogger logger, Exception ex, int maxAttempts, HttpMethod method, Uri? uri);
+
+	[LoggerMessage(LogLevel.Warning, "HTTP request failed on attempt {Attempt}, retrying in {Delay}ms for {Method} {Uri}")]
+	private static partial void LogRetryAfterException(ILogger logger, Exception ex, int attempt, double delay, HttpMethod method, Uri? uri);
 }
