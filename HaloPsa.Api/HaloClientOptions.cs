@@ -9,7 +9,6 @@ namespace HaloPsa.Api;
 public partial class HaloClientOptions
 {
 	private static readonly Regex _guidRegex = GetGuidRegex();
-	private static readonly Regex _haloClientSecretRegex = GetHaloClientSecretRegex();
 
 	/// <summary>
 	/// Gets or sets the Halo account identifier
@@ -22,7 +21,7 @@ public partial class HaloClientOptions
 	public required string ClientId { get; init; }
 
 	/// <summary>
-	/// Gets or sets the Halo client secret (must be in the format of two concatenated GUIDs)
+	/// Gets or sets the Halo client secret
 	/// </summary>
 	public required string ClientSecret { get; init; }
 
@@ -108,10 +107,7 @@ public partial class HaloClientOptions
 			throw new FormatException("ClientId must be a valid GUID format (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).");
 		}
 
-		if (!_haloClientSecretRegex.IsMatch(ClientSecret))
-		{
-			throw new FormatException("ClientSecret must be in the format of two concatenated GUIDs (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).");
-		}
+
 	}
 
 	private void ValidateTimings()
@@ -140,6 +136,4 @@ public partial class HaloClientOptions
 	[GeneratedRegex(@"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", RegexOptions.Compiled)]
 	private static partial Regex GetGuidRegex();
 
-	[GeneratedRegex(@"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", RegexOptions.Compiled)]
-	private static partial Regex GetHaloClientSecretRegex();
 }

@@ -87,21 +87,6 @@ public class HaloClientInfrastructureTests(IntegrationTestFixture fixture)
 	}
 
 	[Fact]
-	public void HaloClientOptions_WithInvalidClientSecret_ThrowsFormatException()
-	{
-		// Arrange & Act & Assert
-		Action act = () => new HaloClientOptions
-		{
-			Account = "test-account",
-			ClientId = Guid.NewGuid().ToString(),
-			ClientSecret = "invalid-secret"
-		}.Validate();
-
-		_ = act.Should().Throw<FormatException>()
-			.WithMessage("ClientSecret must be in the format of two concatenated GUIDs*");
-	}
-
-	[Fact]
 	public void HaloClientOptions_WithInvalidTimeout_ThrowsArgumentException()
 	{
 		// Arrange & Act & Assert

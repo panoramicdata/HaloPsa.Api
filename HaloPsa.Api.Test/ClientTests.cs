@@ -187,32 +187,6 @@ public class ClientTests
 	}
 
 	[Fact]
-	public void CreateClient_InvalidHaloClientSecretFormat_SingleGuid_ThrowsFormatException()
-	{
-		Action act = () => _ = new HaloClient(new HaloClientOptions
-		{
-			Account = "test",
-			ClientId = "11111111-1111-1111-1111-111111111111",
-			ClientSecret = "11111111-1111-1111-1111-111111111111"
-		});
-		_ = act.Should().ThrowExactly<FormatException>()
-			.WithMessage("ClientSecret must be in the format of two concatenated GUIDs (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).");
-	}
-
-	[Fact]
-	public void CreateClient_InvalidHaloClientSecretFormat_NoHyphens_ThrowsFormatException()
-	{
-		Action act = () => _ = new HaloClient(new HaloClientOptions
-		{
-			Account = "test",
-			ClientId = "11111111-1111-1111-1111-111111111111",
-			ClientSecret = "1111111111111111111111111111111111111111111111111111111111111111111111111111"
-		});
-		_ = act.Should().ThrowExactly<FormatException>()
-			.WithMessage("ClientSecret must be in the format of two concatenated GUIDs (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).");
-	}
-
-	[Fact]
 	public void CreateClient_ValidCredentialsWithMixedCase_Succeeds()
 		=> _ = new HaloClient(new HaloClientOptions
 		{
@@ -228,5 +202,14 @@ public class ClientTests
 			Account = "test",
 			ClientId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
 			ClientSecret = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee-ffffffff-1111-2222-3333-444444444444"
+		});
+
+	[Fact]
+	public void CreateClient_ValidCredentialsWithBase64Secret_Succeeds()
+		=> _ = new HaloClient(new HaloClientOptions
+		{
+			Account = "test",
+			ClientId = "608b2936-4f6a-45c1-b95f-ec8613d571d9",
+			ClientSecret = "FWEcJZhDzmRvp-OoIVCQV9zO0bTsLai7c0fdS4KyDak"
 		});
 }
