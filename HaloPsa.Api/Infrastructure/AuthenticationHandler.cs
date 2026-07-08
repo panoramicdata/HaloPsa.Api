@@ -59,7 +59,9 @@ internal sealed partial class AuthenticationHandler : DelegatingHandler
 		if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized && !string.IsNullOrEmpty(_accessToken))
 		{
 			if (_options.Logger != null)
+			{
 				LogUnauthorizedRefresh(_options.Logger);
+			}
 
 			// Clear the current token and get a new one
 			_accessToken = null;
@@ -145,7 +147,10 @@ internal sealed partial class AuthenticationHandler : DelegatingHandler
 	private async Task RefreshTokenAsync(CancellationToken cancellationToken)
 	{
 		if (_options.Logger != null)
+		{
 			LogRefreshingToken(_options.Logger);
+		}
+
 		try
 		{
 			var tokenResponse = await RequestTokenAsync(cancellationToken).ConfigureAwait(false);
@@ -160,7 +165,10 @@ internal sealed partial class AuthenticationHandler : DelegatingHandler
 		catch (Exception ex) when (ex is not AuthenticationException)
 		{
 			if (_options.Logger != null)
+			{
 				LogTokenRefreshFailed(_options.Logger, ex);
+			}
+
 			throw new AuthenticationException("Failed to obtain access token from Halo API", ex);
 		}
 	}
@@ -181,7 +189,10 @@ internal sealed partial class AuthenticationHandler : DelegatingHandler
 		{
 			var errorContent = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 			if (_options.Logger != null)
+			{
 				LogAuthFailed(_options.Logger, response.StatusCode, errorContent);
+			}
+
 			throw new AuthenticationException(
 				$"Failed to obtain access token. Status: {response.StatusCode}, Content: {errorContent}");
 		}
@@ -193,12 +204,24 @@ internal sealed partial class AuthenticationHandler : DelegatingHandler
 			LogTokenResponse(_options.Logger, responseContent);
 		}
 
-		var tokenResponse = JsonSerializer.Deserialize<TokenResponse>(responseContent, _jsonSerializerOptions)
-			?? throw new AuthenticationException($"Invalid token response received from Halo API. Response: {responseContent}");
+		TokenResponse? tokenResponse;
+		try
+		{
+			tokenResponse = JsonSerializer.Deserialize<TokenResponse>(responseContent, _jsonSerializerOptions);
+		}
+		catch (JsonException)
+		{
+			// The token endpoint can return a 2xx with a non-JSON (e.g. HTML login/error page) body.
+			// Raise a clear, specific AuthenticationException here (rather than letting the raw JsonException
+			// propagate) so RefreshTokenAsync's "ex is not AuthenticationException" filter skips its Error log.
+			var excerpt = responseContent.Length > 200 ? responseContent[..200] + "..." : responseContent;
+			throw new AuthenticationException(
+				$"Failed to obtain access token: the Halo API token endpoint returned a non-JSON response. Status: {response.StatusCode}, Content: {excerpt}");
+		}
 
-		return !string.IsNullOrEmpty(tokenResponse.AccessToken)
-			? tokenResponse
-			: throw new AuthenticationException($"Invalid token response received from Halo API. Response: {responseContent}");
+		return tokenResponse is null || string.IsNullOrEmpty(tokenResponse.AccessToken)
+			? throw new AuthenticationException($"Invalid token response received from Halo API. Response: {responseContent}")
+			: tokenResponse;
 	}
 
 	protected override void Dispose(bool disposing)
