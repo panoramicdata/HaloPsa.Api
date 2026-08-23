@@ -1,4 +1,4 @@
-﻿using HaloPsa.Api.Infrastructure;
+using HaloPsa.Api.Infrastructure;
 using HaloPsa.Api.Interfaces;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -27,7 +27,7 @@ public class HaloClient : IHaloClient, IDisposable
 		_httpClient = CreateHttpClient();
 
 		// Initialize API modules lazily
-		Psa = new Lazy<IPsaApi>(() => new PsaApi(_httpClient)).Value;
+		Psa = new Lazy<IPsaApi>(() => new PsaApi(_httpClient, _options.ReadOnly)).Value;
 		ServiceDesk = new Lazy<IServiceDeskApi>(() => new ServiceDeskApi(_httpClient)).Value;
 		System = new Lazy<ISystemApi>(() => new SystemApi(_httpClient)).Value;
 	}

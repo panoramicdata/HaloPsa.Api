@@ -1,4 +1,4 @@
-﻿using HaloPsa.Api.Exceptions;
+using HaloPsa.Api.Exceptions;
 using HaloPsa.Api.Infrastructure;
 using HaloPsa.Api.Interfaces;
 using Refit;
@@ -10,19 +10,20 @@ namespace HaloPsa.Api;
 /// <summary>
 /// Implementation of PSA API module
 /// </summary>
-internal sealed class PsaApi(HttpClient _httpClient) : IPsaApi
+internal sealed class PsaApi(HttpClient _httpClient, bool? readOnly = null) : IPsaApi
 {
 	private static readonly RefitSettings _refitSettings = new()
 	{
 		ExceptionFactory = ConvertApiExceptionToHaloApiException
 	};
 
-	public TicketsApiWrapper Tickets { get; } = new Lazy<TicketsApiWrapper>(() => new TicketsApiWrapper(RestService.For<ITicketsApi>(_httpClient, _refitSettings))).Value;
+	public TicketsApiWrapper Tickets { get; } = new Lazy<TicketsApiWrapper>(() => new TicketsApiWrapper(RestService.For<ITicketsApi>(_httpClient, _refitSettings), readOnly)).Value;
 	public TicketTypesApiWrapper TicketTypes { get; } = new Lazy<TicketTypesApiWrapper>(() => new TicketTypesApiWrapper(RestService.For<ITicketTypesRefitApi>(_httpClient, _refitSettings))).Value;
 	public UsersApiWrapper Users { get; } = new Lazy<UsersApiWrapper>(() => new UsersApiWrapper(RestService.For<IUsersRefitApi>(_httpClient, _refitSettings))).Value;
 	public ClientsApiWrapper Clients { get; } = new Lazy<ClientsApiWrapper>(() => new ClientsApiWrapper(RestService.For<IClientsRefitApi>(_httpClient, _refitSettings))).Value;
 	public AssetsApiWrapper Assets { get; } = new Lazy<AssetsApiWrapper>(() => new AssetsApiWrapper(RestService.For<IAssetsRefitApi>(_httpClient, _refitSettings))).Value;
 	public ProjectsApiWrapper Projects { get; } = new Lazy<ProjectsApiWrapper>(() => new ProjectsApiWrapper(RestService.For<IProjectsRefitApi>(_httpClient, _refitSettings))).Value;
+	public StatusesApiWrapper Statuses { get; } = new Lazy<StatusesApiWrapper>(() => new StatusesApiWrapper(RestService.For<IStatusesApi>(_httpClient, _refitSettings))).Value;
 
 	/// <summary>
 	/// Converts Refit ApiExceptions to appropriate HaloApiExceptions
