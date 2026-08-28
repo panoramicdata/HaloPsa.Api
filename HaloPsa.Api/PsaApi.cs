@@ -30,7 +30,7 @@ internal sealed class PsaApi(HttpClient _httpClient, bool? readOnly = null) : IP
 	/// </summary>
 	/// <param name="httpResponseMessage">The HTTP response message</param>
 	/// <returns>The appropriate HaloApiException or null if no exception should be thrown</returns>
-	private static async Task<Exception?> ConvertApiExceptionToHaloApiException(HttpResponseMessage httpResponseMessage)
+	private static async ValueTask<Exception?> ConvertApiExceptionToHaloApiException(HttpResponseMessage httpResponseMessage)
 	{
 		if (httpResponseMessage.IsSuccessStatusCode)
 		{
