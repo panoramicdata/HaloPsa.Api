@@ -25,6 +25,9 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6
+      with:
+        # Nerdbank.GitVersioning needs full history; without it CodeQL Autobuild fails.
+        fetch-depth: 0
 
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v3
