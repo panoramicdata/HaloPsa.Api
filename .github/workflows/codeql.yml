@@ -24,7 +24,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         # Nerdbank.GitVersioning needs full history; without it CodeQL Autobuild fails.
         fetch-depth: 0

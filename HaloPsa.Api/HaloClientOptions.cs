@@ -6,9 +6,11 @@ namespace HaloPsa.Api;
 /// <summary>
 /// Configuration options for the Halo API client
 /// </summary>
-public partial class HaloClientOptions
+public class HaloClientOptions
 {
-	private static readonly Regex _guidRegex = GetGuidRegex();
+	private static readonly Regex _guidRegex = new(
+		@"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+		RegexOptions.Compiled);
 
 	/// <summary>
 	/// Gets or sets the Halo account identifier
@@ -156,8 +158,5 @@ public partial class HaloClientOptions
 			throw new ArgumentException("MaxRetryDelay must be greater than or equal to RetryDelay.", nameof(MaxRetryDelay));
 		}
 	}
-
-	[GeneratedRegex(@"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", RegexOptions.Compiled)]
-	private static partial Regex GetGuidRegex();
 
 }

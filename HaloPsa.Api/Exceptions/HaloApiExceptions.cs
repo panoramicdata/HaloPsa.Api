@@ -333,33 +333,6 @@ public class HaloNotFoundException : HaloApiException
 		ResourceId = resourceId;
 	}
 
-	/// <summary>
-	/// Initializes a new instance of the HaloNotFoundException class with detailed error information
-	/// </summary>
-	/// <param name="message">The message that describes the error</param>
-	/// <param name="resourceType">The type of resource that was not found</param>
-	/// <param name="resourceId">The ID of the resource that was not found</param>
-	/// <param name="statusCode">The HTTP status code associated with the error</param>
-	/// <param name="errorCode">The error code from the API response</param>
-	/// <param name="details">Additional error details from the API</param>
-	/// <param name="requestUrl">The request URL that caused the error</param>
-	/// <param name="requestMethod">The request method that caused the error</param>
-	/// <param name="innerException">The exception that is the cause of the current exception</param>
-	public HaloNotFoundException(
-		string message,
-		string? resourceType,
-		object? resourceId,
-		int? statusCode,
-		string? errorCode,
-		Dictionary<string, object?>? details,
-		string? requestUrl,
-		string? requestMethod,
-		Exception? innerException)
-		: base(message, statusCode, errorCode, details, requestUrl, requestMethod, innerException)
-	{
-		ResourceType = resourceType;
-		ResourceId = resourceId;
-	}
 }
 
 /// <summary>
@@ -531,39 +504,6 @@ public class HaloRateLimitException : HaloApiException
 		ResetTime = resetTime;
 	}
 
-	/// <summary>
-	/// Initializes a new instance of the HaloRateLimitException class with detailed error information
-	/// </summary>
-	/// <param name="message">The message that describes the error</param>
-	/// <param name="retryAfterSeconds">Number of seconds to wait before retrying</param>
-	/// <param name="rateLimit">The rate limit that was exceeded</param>
-	/// <param name="remainingRequests">Remaining requests in the current rate limit window</param>
-	/// <param name="resetTime">When the rate limit window resets</param>
-	/// <param name="statusCode">The HTTP status code associated with the error</param>
-	/// <param name="errorCode">The error code from the API response</param>
-	/// <param name="details">Additional error details from the API</param>
-	/// <param name="requestUrl">The request URL that caused the error</param>
-	/// <param name="requestMethod">The request method that caused the error</param>
-	/// <param name="innerException">The exception that is the cause of the current exception</param>
-	public HaloRateLimitException(
-		string message,
-		int? retryAfterSeconds,
-		int? rateLimit,
-		int? remainingRequests,
-		DateTime? resetTime,
-		int? statusCode,
-		string? errorCode,
-		Dictionary<string, object?>? details,
-		string? requestUrl,
-		string? requestMethod,
-		Exception? innerException)
-		: base(message, statusCode, errorCode, details, requestUrl, requestMethod, innerException)
-	{
-		RetryAfterSeconds = retryAfterSeconds;
-		RateLimit = rateLimit;
-		RemainingRequests = remainingRequests;
-		ResetTime = resetTime;
-	}
 }
 
 /// <summary>

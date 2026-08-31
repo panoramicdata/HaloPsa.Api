@@ -118,12 +118,7 @@ public class HaloApiExceptionTests
 			message: "Ticket not found",
 			resourceType: "Ticket",
 			resourceId: 123,
-			statusCode: 404,
-			errorCode: null,
-			details: null,
-			requestUrl: null,
-			requestMethod: null,
-			innerException: null);
+			errorContext: new HaloApiErrorContext { StatusCode = 404 });
 
 		// Assert
 		_ = exception.Message.Should().Be("Ticket not found");
@@ -176,12 +171,7 @@ public class HaloApiExceptionTests
 			rateLimit: 100,
 			remainingRequests: 0,
 			resetTime: resetTime,
-			statusCode: 429,
-			errorCode: null,
-			details: null,
-			requestUrl: null,
-			requestMethod: null,
-			innerException: null);
+			errorContext: new HaloApiErrorContext { StatusCode = 429 });
 
 		// Assert
 		_ = exception.Message.Should().Be("Rate limit exceeded");

@@ -7,7 +7,7 @@ namespace HaloPsa.Api.Infrastructure;
 /// <summary>
 /// HTTP message handler that implements retry logic with exponential backoff
 /// </summary>
-internal sealed partial class RetryHandler(
+internal sealed class RetryHandler(
 	int maxRetryAttempts,
 	TimeSpan retryDelay,
 	bool useExponentialBackoff,
@@ -34,34 +34,28 @@ internal sealed partial class RetryHandler(
 		HttpRequestMessage request,
 		CancellationToken cancellationToken)
 	{
-		var attempt = 0;
-		Exception? lastException = null;
-
-		while (attempt <= _maxRetryAttempts)
+		for (var attempt = 0; attempt <= _maxRetryAttempts; attempt++)
 		{
 			try
 			{
 				var response = await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
-				if (response.IsSuccessStatusCode || !IsRetryableStatusCode(response.StatusCode))
+				if (!ShouldRetry(response))
 				{
 					LogSuccessAfterRetry(request, attempt);
 					return response;
 				}
 
-				response.Dispose();
-
 				if (attempt == _maxRetryAttempts)
 				{
-					return CreateFinalFailureResponse(request, response.StatusCode);
+					return CreateFinalFailureResponse(request, response);
 				}
 
 				LogRetryAttempt(request, attempt, response.StatusCode);
+				response.Dispose();
 			}
 			catch (Exception ex) when (IsRetryableException(ex))
 			{
-				lastException = ex;
-
 				if (attempt == _maxRetryAttempts)
 				{
 					LogFinalFailure(request, ex);
@@ -71,16 +65,14 @@ internal sealed partial class RetryHandler(
 				LogRetryAfterException(request, attempt, ex);
 			}
 
-			if (attempt < _maxRetryAttempts)
-			{
-				await Task.Delay(CalculateDelay(attempt), cancellationToken).ConfigureAwait(false);
-			}
-
-			attempt++;
+			await Task.Delay(CalculateDelay(attempt), cancellationToken).ConfigureAwait(false);
 		}
 
-		throw lastException ?? new HttpRequestException($"Request failed after {_maxRetryAttempts + 1} attempts");
+		throw new InvalidOperationException("The retry loop ended unexpectedly.");
 	}
+
+	private static bool ShouldRetry(HttpResponseMessage response)
+		=> !response.IsSuccessStatusCode && IsRetryableStatusCode(response.StatusCode);
 
 	private void LogSuccessAfterRetry(HttpRequestMessage request, int attempt)
 	{
@@ -90,8 +82,11 @@ internal sealed partial class RetryHandler(
 		}
 	}
 
-	private HttpResponseMessage CreateFinalFailureResponse(HttpRequestMessage request, HttpStatusCode statusCode)
+	private HttpResponseMessage CreateFinalFailureResponse(HttpRequestMessage request, HttpResponseMessage response)
 	{
+		var statusCode = response.StatusCode;
+		response.Dispose();
+
 		if (_logger?.IsEnabled(LogLevel.Warning) == true)
 		{
 			LogFinalFailureStatus(_logger, _maxRetryAttempts + 1, request.Method, request.RequestUri, statusCode);
@@ -146,18 +141,38 @@ internal sealed partial class RetryHandler(
 	private static bool IsRetryableException(Exception ex)
 		=> ex is HttpRequestException or TaskCanceledException or SocketException;
 
-	[LoggerMessage(LogLevel.Information, "HTTP request succeeded on attempt {Attempt} for {Method} {Uri}")]
-	private static partial void LogSuccessOnRetry(ILogger logger, int attempt, HttpMethod method, Uri? uri);
+	private static readonly Action<ILogger, int, HttpMethod, Uri?, Exception?> _logSuccessOnRetry = LoggerMessage.Define<int, HttpMethod, Uri?>(
+		LogLevel.Information, new EventId(1, nameof(LogSuccessOnRetry)),
+		"HTTP request succeeded on attempt {Attempt} for {Method} {Uri}");
 
-	[LoggerMessage(LogLevel.Warning, "HTTP request failed after {MaxAttempts} attempts for {Method} {Uri} with status {StatusCode}")]
-	private static partial void LogFinalFailureStatus(ILogger logger, int maxAttempts, HttpMethod method, Uri? uri, HttpStatusCode statusCode);
+	private static readonly Action<ILogger, int, HttpMethod, Uri?, HttpStatusCode, Exception?> _logFinalFailureStatus = LoggerMessage.Define<int, HttpMethod, Uri?, HttpStatusCode>(
+		LogLevel.Warning, new EventId(2, nameof(LogFinalFailureStatus)),
+		"HTTP request failed after {MaxAttempts} attempts for {Method} {Uri} with status {StatusCode}");
 
-	[LoggerMessage(LogLevel.Warning, "HTTP request failed on attempt {Attempt}, retrying in {Delay}ms for {Method} {Uri} (Status: {StatusCode})")]
-	private static partial void LogRetryAttemptStatus(ILogger logger, int attempt, double delay, HttpMethod method, Uri? uri, HttpStatusCode statusCode);
+	private static readonly Action<ILogger, int, double, HttpMethod, Uri?, HttpStatusCode, Exception?> _logRetryAttemptStatus = LoggerMessage.Define<int, double, HttpMethod, Uri?, HttpStatusCode>(
+		LogLevel.Warning, new EventId(3, nameof(LogRetryAttemptStatus)),
+		"HTTP request failed on attempt {Attempt}, retrying in {Delay}ms for {Method} {Uri} (Status: {StatusCode})");
 
-	[LoggerMessage(LogLevel.Error, "HTTP request failed after {MaxAttempts} attempts for {Method} {Uri}")]
-	private static partial void LogFinalFailureException(ILogger logger, Exception ex, int maxAttempts, HttpMethod method, Uri? uri);
+	private static readonly Action<ILogger, int, HttpMethod, Uri?, Exception?> _logFinalFailureException = LoggerMessage.Define<int, HttpMethod, Uri?>(
+		LogLevel.Error, new EventId(4, nameof(LogFinalFailureException)),
+		"HTTP request failed after {MaxAttempts} attempts for {Method} {Uri}");
 
-	[LoggerMessage(LogLevel.Warning, "HTTP request failed on attempt {Attempt}, retrying in {Delay}ms for {Method} {Uri}")]
-	private static partial void LogRetryAfterException(ILogger logger, Exception ex, int attempt, double delay, HttpMethod method, Uri? uri);
+	private static readonly Action<ILogger, int, double, HttpMethod, Uri?, Exception?> _logRetryAfterException = LoggerMessage.Define<int, double, HttpMethod, Uri?>(
+		LogLevel.Warning, new EventId(5, nameof(LogRetryAfterException)),
+		"HTTP request failed on attempt {Attempt}, retrying in {Delay}ms for {Method} {Uri}");
+
+	private static void LogSuccessOnRetry(ILogger logger, int attempt, HttpMethod method, Uri? uri)
+		=> _logSuccessOnRetry(logger, attempt, method, uri, null);
+
+	private static void LogFinalFailureStatus(ILogger logger, int maxAttempts, HttpMethod method, Uri? uri, HttpStatusCode statusCode)
+		=> _logFinalFailureStatus(logger, maxAttempts, method, uri, statusCode, null);
+
+	private static void LogRetryAttemptStatus(ILogger logger, int attempt, double delay, HttpMethod method, Uri? uri, HttpStatusCode statusCode)
+		=> _logRetryAttemptStatus(logger, attempt, delay, method, uri, statusCode, null);
+
+	private static void LogFinalFailureException(ILogger logger, Exception ex, int maxAttempts, HttpMethod method, Uri? uri)
+		=> _logFinalFailureException(logger, maxAttempts, method, uri, ex);
+
+	private static void LogRetryAfterException(ILogger logger, Exception ex, int attempt, double delay, HttpMethod method, Uri? uri)
+		=> _logRetryAfterException(logger, attempt, delay, method, uri, ex);
 }

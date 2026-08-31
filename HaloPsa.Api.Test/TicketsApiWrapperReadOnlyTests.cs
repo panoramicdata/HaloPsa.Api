@@ -125,42 +125,48 @@ public class TicketsApiWrapperReadOnlyTests
 	private sealed class ThrowingTicketsApi : ITicketsApi
 	{
 		public Task<TicketsResponse> GetAllAsync(TicketFilter? filter, CancellationToken cancellationToken)
-			=> throw new NotSupportedException();
+			=> ThrowIfReached<Task<TicketsResponse>>(filter, cancellationToken);
 
 		public Task<TicketsResponse> GetAllAsync(CancellationToken cancellationToken)
-			=> throw new NotSupportedException();
+			=> ThrowIfReached<Task<TicketsResponse>>(cancellationToken);
 
 		public Task<Ticket> GetByIdAsync(int id, bool includeDetails, CancellationToken cancellationToken)
-			=> throw new NotSupportedException();
+			=> ThrowIfReached<Task<Ticket>>(id, includeDetails, cancellationToken);
 
 		public Task<Ticket> GetByIdAsync(int id, CancellationToken cancellationToken)
-			=> throw new NotSupportedException();
+			=> ThrowIfReached<Task<Ticket>>(id, cancellationToken);
 
 		public Task<CreateTicketResponse> CreateAsync(CreateTicketRequest request, CancellationToken cancellationToken)
-			=> throw new NotSupportedException();
+			=> ThrowIfReached<Task<CreateTicketResponse>>(request, cancellationToken);
 
 		public Task<UpdateTicketResponse> UpdateAsync(int id, UpdateTicketRequest request, CancellationToken cancellationToken)
-			=> throw new NotSupportedException();
+			=> ThrowIfReached<Task<UpdateTicketResponse>>(id, request, cancellationToken);
 
 		public Task DeleteAsync(int id, CancellationToken cancellationToken)
-			=> throw new NotSupportedException();
+			=> ThrowIfReached<Task>(id, cancellationToken);
 
 		public Task<UpdateTicketResponse> CloseAsync(int id, string resolution, CancellationToken cancellationToken)
-			=> throw new NotSupportedException();
+			=> ThrowIfReached<Task<UpdateTicketResponse>>(id, resolution, cancellationToken);
 
 		public Task<UpdateTicketResponse> CloseAsync(int id, CancellationToken cancellationToken)
-			=> throw new NotSupportedException();
+			=> ThrowIfReached<Task<UpdateTicketResponse>>(id, cancellationToken);
 
 		public Task<UpdateTicketResponse> ReopenAsync(int id, string reason, CancellationToken cancellationToken)
-			=> throw new NotSupportedException();
+			=> ThrowIfReached<Task<UpdateTicketResponse>>(id, reason, cancellationToken);
 
 		public Task<UpdateTicketResponse> ReopenAsync(int id, CancellationToken cancellationToken)
-			=> throw new NotSupportedException();
+			=> ThrowIfReached<Task<UpdateTicketResponse>>(id, cancellationToken);
 
 		public Task<UpdateTicketResponse> AssignAsync(int id, int agentId, CancellationToken cancellationToken)
-			=> throw new NotSupportedException();
+			=> ThrowIfReached<Task<UpdateTicketResponse>>(id, agentId, cancellationToken);
 
 		public Task<UpdateTicketResponse> AssignAsync(int id, int agentId, int teamId, CancellationToken cancellationToken)
-			=> throw new NotSupportedException();
+			=> ThrowIfReached<Task<UpdateTicketResponse>>(id, agentId, teamId, cancellationToken);
+
+		private static T ThrowIfReached<T>(params object?[] arguments)
+		{
+			GC.KeepAlive(arguments);
+			throw new NotSupportedException();
+		}
 	}
 }

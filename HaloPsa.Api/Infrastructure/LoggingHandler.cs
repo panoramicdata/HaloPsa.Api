@@ -6,7 +6,7 @@ namespace HaloPsa.Api.Infrastructure;
 /// <summary>
 /// HTTP message handler that provides logging capabilities for requests and responses
 /// </summary>
-internal sealed partial class LoggingHandler(
+internal sealed class LoggingHandler(
 	ILogger logger,
 	bool logRequests,
 	bool logResponses) : DelegatingHandler
@@ -79,9 +79,13 @@ internal sealed partial class LoggingHandler(
 		if (logger.IsEnabled(level))
 		{
 			if (response.IsSuccessStatusCode)
+			{
 				LogResponseSuccess(logger, requestId, (int)response.StatusCode, response.ReasonPhrase, elapsed.TotalMilliseconds);
+			}
 			else
+			{
 				LogResponseFailure(logger, requestId, (int)response.StatusCode, response.ReasonPhrase, elapsed.TotalMilliseconds);
+			}
 		}
 
 		if (!response.IsSuccessStatusCode && logger.IsEnabled(LogLevel.Debug))
@@ -93,21 +97,51 @@ internal sealed partial class LoggingHandler(
 	private void LogHttpException(HttpRequestMessage request, Exception exception, TimeSpan elapsed, string requestId)
 		=> LogException(logger, exception, requestId, request.Method, request.RequestUri, elapsed.TotalMilliseconds, exception.Message);
 
-	[LoggerMessage(LogLevel.Information, "[{RequestId}] HTTP {Method} {Uri}")]
-	private static partial void LogRequest(ILogger logger, string requestId, HttpMethod method, Uri? uri);
+	private static readonly Action<ILogger, string, HttpMethod, Uri?, Exception?> _logRequest = LoggerMessage.Define<string, HttpMethod, Uri?>(
+		LogLevel.Information,
+		new EventId(1, nameof(LogRequest)),
+		"[{RequestId}] HTTP {Method} {Uri}");
 
-	[LoggerMessage(LogLevel.Debug, "[{RequestId}] Request Headers: {Headers}")]
-	private static partial void LogRequestHeaders(ILogger logger, string requestId, string headers);
+	private static readonly Action<ILogger, string, string, Exception?> _logRequestHeaders = LoggerMessage.Define<string, string>(
+		LogLevel.Debug,
+		new EventId(2, nameof(LogRequestHeaders)),
+		"[{RequestId}] Request Headers: {Headers}");
 
-	[LoggerMessage(LogLevel.Information, "[{RequestId}] HTTP {StatusCode} {ReasonPhrase} in {ElapsedMs}ms")]
-	private static partial void LogResponseSuccess(ILogger logger, string requestId, int statusCode, string? reasonPhrase, double elapsedMs);
+	private static readonly Action<ILogger, string, int, string?, double, Exception?> _logResponseSuccess = LoggerMessage.Define<string, int, string?, double>(
+		LogLevel.Information,
+		new EventId(3, nameof(LogResponseSuccess)),
+		"[{RequestId}] HTTP {StatusCode} {ReasonPhrase} in {ElapsedMs}ms");
 
-	[LoggerMessage(LogLevel.Warning, "[{RequestId}] HTTP {StatusCode} {ReasonPhrase} in {ElapsedMs}ms")]
-	private static partial void LogResponseFailure(ILogger logger, string requestId, int statusCode, string? reasonPhrase, double elapsedMs);
+	private static readonly Action<ILogger, string, int, string?, double, Exception?> _logResponseFailure = LoggerMessage.Define<string, int, string?, double>(
+		LogLevel.Warning,
+		new EventId(4, nameof(LogResponseFailure)),
+		"[{RequestId}] HTTP {StatusCode} {ReasonPhrase} in {ElapsedMs}ms");
 
-	[LoggerMessage(LogLevel.Debug, "[{RequestId}] Response Headers: {Headers}")]
-	private static partial void LogResponseHeaders(ILogger logger, string requestId, string headers);
+	private static readonly Action<ILogger, string, string, Exception?> _logResponseHeaders = LoggerMessage.Define<string, string>(
+		LogLevel.Debug,
+		new EventId(5, nameof(LogResponseHeaders)),
+		"[{RequestId}] Response Headers: {Headers}");
 
-	[LoggerMessage(LogLevel.Error, "[{RequestId}] HTTP {Method} {Uri} failed after {ElapsedMs}ms: {ErrorMessage}")]
-	private static partial void LogException(ILogger logger, Exception ex, string requestId, HttpMethod method, Uri? uri, double elapsedMs, string errorMessage);
+	private static readonly Action<ILogger, string, HttpMethod, Uri?, double, string, Exception?> _logException = LoggerMessage.Define<string, HttpMethod, Uri?, double, string>(
+		LogLevel.Error,
+		new EventId(6, nameof(LogException)),
+		"[{RequestId}] HTTP {Method} {Uri} failed after {ElapsedMs}ms: {ErrorMessage}");
+
+	private static void LogRequest(ILogger logger, string requestId, HttpMethod method, Uri? uri)
+		=> _logRequest(logger, requestId, method, uri, null);
+
+	private static void LogRequestHeaders(ILogger logger, string requestId, string headers)
+		=> _logRequestHeaders(logger, requestId, headers, null);
+
+	private static void LogResponseSuccess(ILogger logger, string requestId, int statusCode, string? reasonPhrase, double elapsedMs)
+		=> _logResponseSuccess(logger, requestId, statusCode, reasonPhrase, elapsedMs, null);
+
+	private static void LogResponseFailure(ILogger logger, string requestId, int statusCode, string? reasonPhrase, double elapsedMs)
+		=> _logResponseFailure(logger, requestId, statusCode, reasonPhrase, elapsedMs, null);
+
+	private static void LogResponseHeaders(ILogger logger, string requestId, string headers)
+		=> _logResponseHeaders(logger, requestId, headers, null);
+
+	private static void LogException(ILogger logger, Exception ex, string requestId, HttpMethod method, Uri? uri, double elapsedMs, string errorMessage)
+		=> _logException(logger, requestId, method, uri, elapsedMs, errorMessage, ex);
 }
