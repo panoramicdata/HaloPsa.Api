@@ -1,4 +1,4 @@
-using AwesomeAssertions;
+﻿using AwesomeAssertions;
 using HaloPsa.Api.Exceptions;
 using HaloPsa.Api.Models.Tickets;
 
@@ -45,23 +45,17 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 		var allTickets = await HaloClient.Psa.Tickets.GetAllAsync(CancellationToken.None);
 
 		// If no tickets exist, create a test ticket first
-		if (!allTickets.Tickets.Any())
+		if (allTickets.Tickets.Count == 0)
 		{
-			var users = await HaloClient.Psa.Users.GetAllAsync(CancellationToken.None);
-			_ = users.Should().NotBeEmpty("Need at least one user to create test ticket");
-
-			var createRequest = new CreateTicketRequest
-			{
-				Summary = $"Test Ticket for Client Filter - {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}",
-				Details = "Test ticket created for client filtering test",
-				ClientId = clients[0].Id,
-				UserId = users[0].Id,
-				Priority = 1
-			};
+			var createRequest = await BuildCreateTicketRequestAsync(
+				"Test Ticket for Client Filter",
+				"Test ticket created for client filtering test",
+				CancellationToken.None);
+			_ = createRequest.Should().NotBeNull("Need at least one user to create test ticket");
 
 			try
 			{
-				var created = await HaloClient.Psa.Tickets.CreateAsync(createRequest, CancellationToken.None);
+				var created = await HaloClient.Psa.Tickets.CreateAsync(createRequest!, CancellationToken.None);
 				_ = created.Should().NotBeNull();
 				_ = created.Ticket.Should().NotBeNull();
 
@@ -76,7 +70,7 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 		}
 
 		// If we still have no tickets, skip the test
-		if (!allTickets.Tickets.Any())
+		if (allTickets.Tickets.Count == 0)
 		{
 			return;
 		}
@@ -100,7 +94,7 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 		_ = result.Tickets.Should().NotBeNull();
 
 		// The filter should work correctly - either return matching tickets or none
-		if (result.Tickets.Any())
+		if (result.Tickets.Count > 0)
 		{
 			// All returned tickets should either match the client ID or have no client assigned
 			_ = result.Tickets.Should().OnlyContain(t =>
@@ -158,11 +152,9 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 		_ = result.Tickets.Should().NotBeNull();
 
 		// If there are results, they should contain the search term
-		if (result.Tickets.Any())
+		if (result.Tickets.Count > 0)
 		{
-			_ = result.Tickets.Should().Contain(t =>
-				t.Summary.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
-				(!string.IsNullOrEmpty(t.Details) && t.Details.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)));
+			_ = result.Tickets.Should().Contain(t => TicketMentions(t, searchTerm));
 		}
 	}
 
@@ -202,35 +194,23 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 	[Fact]
 	public async Task CreateAsync_WithValidRequest_TestsEndpointBehavior()
 	{
-		// Arrange - Get real client and user data first
-		var clients = await HaloClient.Psa.Clients.GetAllAsync(CancellationToken.None);
-		_ = clients.Should().NotBeEmpty("Need at least one client to test ticket creation");
-
-		var users = await HaloClient.Psa.Users.GetAllAsync(CancellationToken.None);
-		_ = users.Should().NotBeEmpty("Need at least one user to test ticket creation");
-
-		var validClientId = clients[0].Id;
-		var validUserId = users[0].Id;
-
-		var request = new CreateTicketRequest
-		{
-			Summary = $"API Test Ticket - {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}",
-			Details = "Test ticket created via API integration test",
-			ClientId = validClientId,
-			UserId = validUserId,
-			Priority = 1
-		};
+		// Arrange - Build the request from real client and user data
+		var request = await BuildCreateTicketRequestAsync(
+			"API Test Ticket",
+			"Test ticket created via API integration test",
+			CancellationToken.None);
+		_ = request.Should().NotBeNull("Need at least one client and one user to test ticket creation");
 
 		// Act & Assert - Test how the endpoint behaves in this environment
 		try
 		{
-			var result = await HaloClient.Psa.Tickets.CreateAsync(request, CancellationToken.None);
+			var result = await HaloClient.Psa.Tickets.CreateAsync(request!, CancellationToken.None);
 
 			// If creation succeeds, verify the response structure
 			_ = result.Should().NotBeNull();
 			_ = result.Ticket.Should().NotBeNull();
 			_ = result.Ticket.Id.Should().BePositive();
-			_ = result.Ticket.Summary.Should().Be(request.Summary);
+			_ = result.Ticket.Summary.Should().Be(request!.Summary);
 			_ = result.Ticket.ClientId.Should().Be(request.ClientId);
 
 			// Clean up the created ticket if possible
@@ -246,8 +226,7 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 		catch (HaloApiException ex)
 		{
 			// If creation fails, verify it fails with proper error handling
-			_ = ex.Should().NotBeNull();
-			_ = ex.StatusCode.Should().BeOneOf(400, 403, 405, 501); // Expected error codes for unsupported operations
+			AssertUnsupportedOperation(ex, UnsupportedOperationStatusCodes);
 		}
 	}
 
@@ -308,8 +287,7 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 			catch (HaloApiException ex)
 			{
 				// If update fails, verify proper error handling
-				_ = ex.Should().NotBeNull();
-				_ = ex.StatusCode.Should().BeOneOf(400, 403, 405, 501); // Expected error codes
+				AssertUnsupportedOperation(ex, UnsupportedOperationStatusCodes);
 			}
 		}
 		catch (InvalidOperationException)
@@ -322,23 +300,15 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 	public async Task DeleteAsync_WithValidId_TestsEndpointBehavior()
 	{
 		// Arrange - Create a test ticket specifically for deletion
-		var clients = await HaloClient.Psa.Clients.GetAllAsync(CancellationToken.None);
-		var users = await HaloClient.Psa.Users.GetAllAsync(CancellationToken.None);
-
-		if (!clients.Any() || !users.Any())
+		var createRequest = await BuildCreateTicketRequestAsync(
+			"Test Ticket for Deletion",
+			"This ticket is created specifically to test deletion",
+			CancellationToken.None);
+		if (createRequest is null)
 		{
 			// Skip if no clients or users available
 			return;
 		}
-
-		var createRequest = new CreateTicketRequest
-		{
-			Summary = $"Test Ticket for Deletion - {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}",
-			Details = "This ticket is created specifically to test deletion",
-			ClientId = clients[0].Id,
-			UserId = users[0].Id,
-			Priority = 1
-		};
 
 		int ticketIdToTest;
 		var createdForTest = false;
@@ -353,7 +323,7 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 		{
 			// If we can't create a ticket, use an existing one if available
 			var existingTickets = await HaloClient.Psa.Tickets.GetAllAsync(CancellationToken.None);
-			if (!existingTickets.Tickets.Any())
+			if (existingTickets.Tickets.Count == 0)
 			{
 				// No tickets available and can't create - skip test
 				return;
@@ -374,14 +344,12 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 		catch (HaloApiException ex) when (!createdForTest)
 		{
 			// If we're trying to delete an existing ticket and it fails, that's expected
-			_ = ex.Should().NotBeNull();
-			_ = ex.StatusCode.Should().BeOneOf(400, 403, 405, 501); // Expected error codes
+			AssertUnsupportedOperation(ex, UnsupportedOperationStatusCodes);
 		}
 		catch (HaloApiException ex) when (createdForTest)
 		{
 			// If we created a ticket but can't delete it, that's also valid behavior to test
-			_ = ex.Should().NotBeNull();
-			_ = ex.StatusCode.Should().BeOneOf(403, 405, 501); // Expected error codes for forbidden operations
+			AssertUnsupportedOperation(ex, [403, 405, 501]);
 		}
 	}
 
@@ -408,8 +376,7 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 			catch (HaloApiException ex)
 			{
 				// If close fails, verify proper error handling
-				_ = ex.Should().NotBeNull();
-				_ = ex.StatusCode.Should().BeOneOf(400, 403, 404, 405, 501); // Expected error codes
+				AssertUnsupportedOperation(ex, UnsupportedTicketOperationStatusCodes);
 			}
 		}
 		catch (InvalidOperationException)
@@ -447,8 +414,7 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 			catch (HaloApiException ex)
 			{
 				// If assignment fails, verify proper error handling
-				_ = ex.Should().NotBeNull();
-				_ = ex.StatusCode.Should().BeOneOf(400, 403, 404, 405, 501); // Expected error codes
+				AssertUnsupportedOperation(ex, UnsupportedTicketOperationStatusCodes);
 			}
 		}
 		catch (InvalidOperationException)
@@ -458,36 +424,78 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 	}
 
 	/// <summary>
+	/// The status codes Halo returns when an endpoint is unavailable or refuses the operation.
+	/// Several of these tests accept either a successful call or one of these, because sandboxes
+	/// differ in which ticket operations they permit.
+	/// </summary>
+	private static readonly int[] UnsupportedOperationStatusCodes = [400, 403, 405, 501];
+
+	/// <summary>
+	/// As <see cref="UnsupportedOperationStatusCodes"/>, plus 404 for operations addressed at a
+	/// specific ticket that the sandbox may no longer hold.
+	/// </summary>
+	private static readonly int[] UnsupportedTicketOperationStatusCodes = [400, 403, 404, 405, 501];
+
+	/// <summary>
+	/// Asserts that a failure is one of the responses a sandbox may legitimately give for an
+	/// operation it does not support, rather than an unexpected error.
+	/// </summary>
+	private static void AssertUnsupportedOperation(HaloApiException exception, int[] expectedStatusCodes)
+	{
+		_ = exception.Should().NotBeNull();
+		_ = exception.StatusCode.Should().BeOneOf(expectedStatusCodes);
+	}
+
+	/// <summary>
+	/// Builds a ticket creation request against the first client and user the tenant reports.
+	/// Returns <see langword="null"/> when the tenant has no client or no user, since a ticket
+	/// cannot be created without both.
+	/// </summary>
+	private async Task<CreateTicketRequest?> BuildCreateTicketRequestAsync(
+		string summary,
+		string details,
+		CancellationToken cancellationToken)
+	{
+		var clients = await HaloClient.Psa.Clients.GetAllAsync(cancellationToken);
+		var users = await HaloClient.Psa.Users.GetAllAsync(cancellationToken);
+
+		if (clients.Count == 0 || users.Count == 0)
+		{
+			return null;
+		}
+
+		return new CreateTicketRequest
+		{
+			Summary = $"{summary} - {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}",
+			Details = details,
+			ClientId = clients[0].Id,
+			UserId = users[0].Id,
+			Priority = 1
+		};
+	}
+
+	/// <summary>
 	/// Helper method to ensure at least one test ticket exists, creating one if needed
 	/// </summary>
 	private async Task<Ticket> EnsureTestTicketExistsAsync(CancellationToken cancellationToken)
 	{
 		// First check if we already have tickets
 		var existingTickets = await HaloClient.Psa.Tickets.GetAllAsync(cancellationToken);
-		if (existingTickets.Tickets.Any())
+		if (existingTickets.Tickets.Count > 0)
 		{
 			return existingTickets.Tickets[0];
 		}
 
 		// No tickets exist, try to create one
-		var clients = await HaloClient.Psa.Clients.GetAllAsync(cancellationToken);
-		_ = clients.Should().NotBeEmpty("Need at least one client to create test ticket");
-
-		var users = await HaloClient.Psa.Users.GetAllAsync(cancellationToken);
-		_ = users.Should().NotBeEmpty("Need at least one user to create test ticket");
-
-		var createRequest = new CreateTicketRequest
-		{
-			Summary = $"Test Ticket - {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}",
-			Details = "Test ticket created for integration testing",
-			ClientId = clients[0].Id,
-			UserId = users[0].Id,
-			Priority = 1
-		};
+		var createRequest = await BuildCreateTicketRequestAsync(
+			"Test Ticket",
+			"Test ticket created for integration testing",
+			cancellationToken);
+		_ = createRequest.Should().NotBeNull("Need at least one client and one user to create a test ticket");
 
 		try
 		{
-			var result = await HaloClient.Psa.Tickets.CreateAsync(createRequest, cancellationToken);
+			var result = await HaloClient.Psa.Tickets.CreateAsync(createRequest!, cancellationToken);
 			_ = result.Should().NotBeNull();
 			_ = result.Ticket.Should().NotBeNull();
 
@@ -510,36 +518,28 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 		var filter = new TicketFilter { Search = content, Count = 1 };
 		var existing = await HaloClient.Psa.Tickets.GetAllAsync(filter, cancellationToken);
 
-		if (existing.Tickets.Any(t =>
-			t.Summary.Contains(content, StringComparison.OrdinalIgnoreCase) ||
-			(!string.IsNullOrEmpty(t.Details) && t.Details.Contains(content, StringComparison.OrdinalIgnoreCase))))
+		if (existing.Tickets.Any(t => TicketMentions(t, content)))
 		{
 			return; // Already have what we need
 		}
 
 		// Create a ticket with the specific content
-		var clients = await HaloClient.Psa.Clients.GetAllAsync(cancellationToken);
-		var users = await HaloClient.Psa.Users.GetAllAsync(cancellationToken);
-
-		if (clients.Any() && users.Any())
+		var createRequest = await BuildCreateTicketRequestAsync(
+			$"Test Ticket {content}",
+			$"Test ticket created for testing search functionality with {content}",
+			cancellationToken);
+		if (createRequest is null)
 		{
-			var createRequest = new CreateTicketRequest
-			{
-				Summary = $"Test Ticket {content} - {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}",
-				Details = $"Test ticket created for testing search functionality with {content}",
-				ClientId = clients[0].Id,
-				UserId = users[0].Id,
-				Priority = 1
-			};
+			return;
+		}
 
-			try
-			{
-				_ = await HaloClient.Psa.Tickets.CreateAsync(createRequest, cancellationToken);
-			}
-			catch (HaloApiException)
-			{
-				// If we can't create, that's okay for this helper
-			}
+		try
+		{
+			_ = await HaloClient.Psa.Tickets.CreateAsync(createRequest, cancellationToken);
+		}
+		catch (HaloApiException)
+		{
+			// If we can't create, that's okay for this helper
 		}
 	}
 
@@ -556,25 +556,17 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 			return; // Already have enough
 		}
 
-		var clients = await HaloClient.Psa.Clients.GetAllAsync(cancellationToken);
-		var users = await HaloClient.Psa.Users.GetAllAsync(cancellationToken);
-
-		if (!clients.Any() || !users.Any())
-		{
-			return; // Can't create tickets without clients and users
-		}
-
 		var ticketsToCreate = minimumCount - currentCount;
 		for (var i = 0; i < ticketsToCreate; i++)
 		{
-			var createRequest = new CreateTicketRequest
+			var createRequest = await BuildCreateTicketRequestAsync(
+				$"Test Ticket {i + 1}",
+				$"Test ticket {i + 1} created for pagination testing",
+				cancellationToken);
+			if (createRequest is null)
 			{
-				Summary = $"Test Ticket {i + 1} - {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}",
-				Details = $"Test ticket {i + 1} created for pagination testing",
-				ClientId = clients[0].Id,
-				UserId = users[0].Id,
-				Priority = 1
-			};
+				return; // Can't create tickets without clients and users
+			}
 
 			try
 			{
@@ -587,4 +579,11 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 			}
 		}
 	}
+
+	/// <summary>
+	/// Whether a ticket's summary or details mention the given text, case-insensitively.
+	/// </summary>
+	private static bool TicketMentions(Ticket ticket, string content)
+		=> ticket.Summary.Contains(content, StringComparison.OrdinalIgnoreCase)
+			|| (!string.IsNullOrEmpty(ticket.Details) && ticket.Details.Contains(content, StringComparison.OrdinalIgnoreCase));
 }
