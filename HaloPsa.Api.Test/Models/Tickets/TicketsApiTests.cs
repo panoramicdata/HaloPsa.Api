@@ -1,4 +1,4 @@
-﻿using AwesomeAssertions;
+using AwesomeAssertions;
 using HaloPsa.Api.Exceptions;
 using HaloPsa.Api.Models.Tickets;
 
@@ -159,26 +159,16 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 	}
 
 	[Fact]
-	public async Task GetByIdAsync_WithValidId_ReturnsTicket()
-	{
-		try
+	public Task GetByIdAsync_WithValidId_ReturnsTicket()
+		=> RunAgainstTestTicketAsync(async ticket =>
 		{
-			// Arrange - Ensure we have at least one ticket
-			var ticket = await EnsureTestTicketExistsAsync(CancellationToken.None);
-			var ticketId = ticket.Id;
-
 			// Act
-			var result = await HaloClient.Psa.Tickets.GetByIdAsync(ticketId, CancellationToken.None);
+			var result = await HaloClient.Psa.Tickets.GetByIdAsync(ticket.Id, CancellationToken.None);
 
 			// Assert
 			_ = result.Should().NotBeNull();
-			_ = result.Id.Should().Be(ticketId);
-		}
-		catch (InvalidOperationException)
-		{
-			// Skip test if we can't create tickets in this sandbox
-		}
-	}
+			_ = result.Id.Should().Be(ticket.Id);
+		});
 
 	[Fact]
 	public async Task GetByIdAsync_WithInvalidId_ThrowsNotFoundException()
@@ -247,15 +237,10 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 	}
 
 	[Fact]
-	public async Task UpdateAsync_WithValidRequest_TestsEndpointBehavior()
-	{
-		try
+	public Task UpdateAsync_WithValidRequest_TestsEndpointBehavior()
+		=> RunAgainstTestTicketAsync(async ticket =>
 		{
-			// Arrange - Ensure we have a ticket to update
-			var ticket = await EnsureTestTicketExistsAsync(CancellationToken.None);
-			var ticketId = ticket.Id;
-			var originalSummary = ticket.Summary;
-
+			// Arrange
 			var updateRequest = new UpdateTicketRequest
 			{
 				Summary = $"Updated via API Test - {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}",
@@ -263,38 +248,25 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 				Priority = 2
 			};
 
-			// Act & Assert - Test how the endpoint behaves
+			// Act
+			var result = await HaloClient.Psa.Tickets.UpdateAsync(ticket.Id, updateRequest, CancellationToken.None);
+
+			// Assert - If update succeeds, verify the response
+			_ = result.Should().NotBeNull();
+			_ = result.Ticket.Should().NotBeNull();
+			_ = result.Ticket.Id.Should().Be(ticket.Id);
+
+			// Try to restore original state if possible
 			try
 			{
-				var result = await HaloClient.Psa.Tickets.UpdateAsync(ticketId, updateRequest, CancellationToken.None);
-
-				// If update succeeds, verify the response
-				_ = result.Should().NotBeNull();
-				_ = result.Ticket.Should().NotBeNull();
-				_ = result.Ticket.Id.Should().Be(ticketId);
-
-				// Try to restore original state if possible
-				try
-				{
-					var restoreRequest = new UpdateTicketRequest { Summary = originalSummary };
-					_ = await HaloClient.Psa.Tickets.UpdateAsync(ticketId, restoreRequest, CancellationToken.None);
-				}
-				catch (HaloApiException)
-				{
-					// Restore failed - that's okay for testing
-				}
+				var restoreRequest = new UpdateTicketRequest { Summary = ticket.Summary };
+				_ = await HaloClient.Psa.Tickets.UpdateAsync(ticket.Id, restoreRequest, CancellationToken.None);
 			}
-			catch (HaloApiException ex)
+			catch (HaloApiException)
 			{
-				// If update fails, verify proper error handling
-				AssertUnsupportedOperation(ex, UnsupportedOperationStatusCodes);
+				// Restore failed - that's okay for testing
 			}
-		}
-		catch (InvalidOperationException)
-		{
-			// Skip test if we can't create tickets in this sandbox
-		}
-	}
+		}, UnsupportedOperationStatusCodes);
 
 	[Fact]
 	public async Task DeleteAsync_WithValidId_TestsEndpointBehavior()
@@ -354,72 +326,72 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 	}
 
 	[Fact]
-	public async Task CloseAsync_WithValidId_TestsEndpointBehavior()
-	{
-		try
+	public Task CloseAsync_WithValidId_TestsEndpointBehavior()
+		=> RunAgainstTestTicketAsync(async ticket =>
 		{
-			// Arrange - Ensure we have a ticket to close
-			var ticket = await EnsureTestTicketExistsAsync(CancellationToken.None);
-			var ticketId = ticket.Id;
+			// Act
+			var result = await HaloClient.Psa.Tickets.CloseAsync(ticket.Id, "Closed by API test", CancellationToken.None);
 
-			// Act & Assert - Test close behavior
-			try
-			{
-				var result = await HaloClient.Psa.Tickets.CloseAsync(ticketId, "Closed by API test", CancellationToken.None);
-
-				// If close succeeds, verify the response
-				_ = result.Should().NotBeNull();
-				_ = result.Ticket.Should().NotBeNull();
-				_ = result.Ticket.Id.Should().Be(ticketId);
-				_ = result.Ticket.IsClosed.Should().BeTrue();
-			}
-			catch (HaloApiException ex)
-			{
-				// If close fails, verify proper error handling
-				AssertUnsupportedOperation(ex, UnsupportedTicketOperationStatusCodes);
-			}
-		}
-		catch (InvalidOperationException)
-		{
-			// Skip test if we can't create tickets in this sandbox
-		}
-	}
+			// Assert - If close succeeds, verify the response
+			_ = result.Should().NotBeNull();
+			_ = result.Ticket.Should().NotBeNull();
+			_ = result.Ticket.Id.Should().Be(ticket.Id);
+			_ = result.Ticket.IsClosed.Should().BeTrue();
+		}, UnsupportedTicketOperationStatusCodes);
 
 	[Fact]
 	public async Task AssignAsync_WithValidIds_TestsEndpointBehavior()
 	{
+		// Arrange - Pick an agent to assign to, preferring a real agent over any user
+		var users = await HaloClient.Psa.Users.GetAllAsync(CancellationToken.None);
+		_ = users.Should().NotBeEmpty("Need at least one user to test assignment");
+
+		var agent = users.FirstOrDefault(u => u.IsAgent) ?? users[0];
+
+		await RunAgainstTestTicketAsync(async ticket =>
+		{
+			// Act
+			var result = await HaloClient.Psa.Tickets.AssignAsync(ticket.Id, agent.Id, CancellationToken.None);
+
+			// Assert - If assignment succeeds, verify the response
+			_ = result.Should().NotBeNull();
+			_ = result.Ticket.Should().NotBeNull();
+			_ = result.Ticket.Id.Should().Be(ticket.Id);
+			_ = result.Ticket.AgentId.Should().Be(agent.Id);
+		}, UnsupportedTicketOperationStatusCodes);
+	}
+
+	/// <summary>
+	/// Runs <paramref name="operation"/> against a ticket the sandbox is asked to supply.
+	///
+	/// Sandboxes decline in two distinct ways, and the tests using this helper tolerate both: the
+	/// sandbox may not permit creating a ticket at all (nothing to test against, so the test simply
+	/// returns), and it may refuse the operation itself with one of
+	/// <paramref name="toleratedFailureStatusCodes"/>. Passing no status codes means any API failure
+	/// is a real failure.
+	/// </summary>
+	private async Task RunAgainstTestTicketAsync(
+		Func<Ticket, Task> operation,
+		int[]? toleratedFailureStatusCodes = null)
+	{
+		Ticket ticket;
 		try
 		{
-			// Arrange - Ensure we have a ticket and a user to assign
-			var ticket = await EnsureTestTicketExistsAsync(CancellationToken.None);
-			var ticketId = ticket.Id;
-
-			var users = await HaloClient.Psa.Users.GetAllAsync(CancellationToken.None);
-			_ = users.Should().NotBeEmpty("Need at least one user to test assignment");
-
-			var agent = users.Where(u => u.IsAgent).FirstOrDefault() ?? users[0];
-			var agentId = agent.Id;
-
-			// Act & Assert - Test assignment behavior
-			try
-			{
-				var result = await HaloClient.Psa.Tickets.AssignAsync(ticketId, agentId, CancellationToken.None);
-
-				// If assignment succeeds, verify the response
-				_ = result.Should().NotBeNull();
-				_ = result.Ticket.Should().NotBeNull();
-				_ = result.Ticket.Id.Should().Be(ticketId);
-				_ = result.Ticket.AgentId.Should().Be(agentId);
-			}
-			catch (HaloApiException ex)
-			{
-				// If assignment fails, verify proper error handling
-				AssertUnsupportedOperation(ex, UnsupportedTicketOperationStatusCodes);
-			}
+			ticket = await EnsureTestTicketExistsAsync(CancellationToken.None);
 		}
 		catch (InvalidOperationException)
 		{
 			// Skip test if we can't create tickets in this sandbox
+			return;
+		}
+
+		try
+		{
+			await operation(ticket);
+		}
+		catch (HaloApiException ex) when (toleratedFailureStatusCodes is not null)
+		{
+			AssertUnsupportedOperation(ex, toleratedFailureStatusCodes);
 		}
 	}
 
