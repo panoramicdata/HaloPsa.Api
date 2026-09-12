@@ -252,9 +252,7 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 			var result = await HaloClient.Psa.Tickets.UpdateAsync(ticket.Id, updateRequest, CancellationToken.None);
 
 			// Assert - If update succeeds, verify the response
-			_ = result.Should().NotBeNull();
-			_ = result.Ticket.Should().NotBeNull();
-			_ = result.Ticket.Id.Should().Be(ticket.Id);
+			AssertRespondsWithTicket(result, ticket.Id);
 
 			// Try to restore original state if possible
 			try
@@ -333,9 +331,7 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 			var result = await HaloClient.Psa.Tickets.CloseAsync(ticket.Id, "Closed by API test", CancellationToken.None);
 
 			// Assert - If close succeeds, verify the response
-			_ = result.Should().NotBeNull();
-			_ = result.Ticket.Should().NotBeNull();
-			_ = result.Ticket.Id.Should().Be(ticket.Id);
+			AssertRespondsWithTicket(result, ticket.Id);
 			_ = result.Ticket.IsClosed.Should().BeTrue();
 		}, UnsupportedTicketOperationStatusCodes);
 
@@ -354,9 +350,7 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 			var result = await HaloClient.Psa.Tickets.AssignAsync(ticket.Id, agent.Id, CancellationToken.None);
 
 			// Assert - If assignment succeeds, verify the response
-			_ = result.Should().NotBeNull();
-			_ = result.Ticket.Should().NotBeNull();
-			_ = result.Ticket.Id.Should().Be(ticket.Id);
+			AssertRespondsWithTicket(result, ticket.Id);
 			_ = result.Ticket.AgentId.Should().Be(agent.Id);
 		}, UnsupportedTicketOperationStatusCodes);
 	}
@@ -407,6 +401,18 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 	/// specific ticket that the sandbox may no longer hold.
 	/// </summary>
 	private static readonly int[] UnsupportedTicketOperationStatusCodes = [400, 403, 404, 405, 501];
+
+	/// <summary>
+	/// Asserts that an operation came back with the ticket it was addressed to. Update, close and
+	/// assign all answer with an <see cref="UpdateTicketResponse"/>, and all three need this much
+	/// checked before they look at the one field they are actually about.
+	/// </summary>
+	private static void AssertRespondsWithTicket(UpdateTicketResponse response, int expectedTicketId)
+	{
+		_ = response.Should().NotBeNull();
+		_ = response.Ticket.Should().NotBeNull();
+		_ = response.Ticket.Id.Should().Be(expectedTicketId);
+	}
 
 	/// <summary>
 	/// Asserts that a failure is one of the responses a sandbox may legitimately give for an
