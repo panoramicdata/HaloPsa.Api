@@ -1,6 +1,6 @@
 param(
 	# Skips waiting for the release run. The tag is still pushed, but nothing confirms a package
-	# reached nuget.org — use it only if you are checking the run yourself.
+	# reached nuget.org - use it only if you are checking the run yourself.
 	[switch]$SkipPublishVerification
 )
 
@@ -58,7 +58,18 @@ if ($LASTEXITCODE -ne 0) {
 	Write-Error "Failed to determine version from Nerdbank.GitVersioning.`n$buildOutput"
 	exit 1
 }
-$version = ($buildOutput | Select-Object -Last 1).ToString().Trim()
+# Quoted rather than .ToString() so that a build which printed nothing yields an empty string
+# instead of throwing on a null reference.
+$version = "$($buildOutput | Select-Object -Last 1)".Trim()
+
+# Pushing the tag is the step that cannot be taken back, and $version is simply whatever MSBuild
+# printed last - a stray warning, or nothing at all, would otherwise be pushed as a tag and have to
+# be cleaned up off the remote. Insist it looks like a version before going anywhere near origin.
+if ($version -notmatch '^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$') {
+	Write-Error "Could not read a version from the build output. Last line was: '$version'"
+	exit 1
+}
+
 Write-Information "Version: $version" -InformationAction Continue
 
 # Check if tag already exists
@@ -96,7 +107,7 @@ for ($attempt = 1; $attempt -le 12 -and -not $runId; $attempt++) {
 }
 
 if (-not $runId) {
-	Write-Error "Tag $version was pushed but no run appeared for it. Check https://github.com/$repoFullName/actions — the workflow may not trigger on tags."
+	Write-Error "Tag $version was pushed but no run appeared for it. Check https://github.com/$repoFullName/actions - the workflow may not trigger on tags."
 	exit 1
 }
 
@@ -107,7 +118,7 @@ $runExitCode = $LASTEXITCODE
 if ($runExitCode -ne 0) {
 	$failure = "The release run did not succeed: https://github.com/$repoFullName/actions/runs/$runId"
 
-	# A refused job — an exhausted Actions budget, for instance — fails before any step runs, so it
+	# A refused job - an exhausted Actions budget, for instance - fails before any step runs, so it
 	# has no failed step to report. The check-run annotation is the only place the reason appears.
 	$jobId = gh api "repos/$repoFullName/actions/runs/$runId/jobs" --jq '.jobs[0].id' 2>$null
 	if ($LASTEXITCODE -eq 0 -and $jobId) {
