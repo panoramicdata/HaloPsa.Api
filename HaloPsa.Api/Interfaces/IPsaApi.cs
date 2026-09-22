@@ -46,4 +46,13 @@ public interface IPsaApi
 	/// Gets the Projects API for project management operations
 	/// </summary>
 	ProjectsApiWrapper Projects { get; }
+
+	/// <summary>
+	/// Gets the Sites API, which lists the sites beneath each client.
+	/// </summary>
+	/// <remarks>
+	/// A Halo client is a container for one or more sites, and a ticket carries both ids. A caller that
+	/// keys its own records on the site rather than the client needs this to enumerate them at all.
+	/// </remarks>
+	SitesApiWrapper Sites { get; }
 }
