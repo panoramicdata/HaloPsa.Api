@@ -15,7 +15,7 @@ public interface ISitesApi
 	/// <param name="includeInactive">Whether to include inactive sites</param>
 	/// <param name="cancellationToken">Cancellation token</param>
 	/// <returns>Response containing the list of sites</returns>
-	[Get("/Site")]
+	[Get("/api/Site")]
 	Task<SitesResponse> GetAllResponseAsync([Query] int? clientId, [Query] bool includeInactive, CancellationToken cancellationToken);
 
 	/// <summary>
@@ -25,6 +25,6 @@ public interface ISitesApi
 	/// <param name="includeDetails">Whether to include additional details</param>
 	/// <param name="cancellationToken">Cancellation token</param>
 	/// <returns>The site with the specified ID</returns>
-	[Get("/Site/{id}")]
+	[Get("/api/Site/{id}")]
 	Task<Site> GetByIdAsync(int id, [Query] bool includeDetails, CancellationToken cancellationToken);
 }

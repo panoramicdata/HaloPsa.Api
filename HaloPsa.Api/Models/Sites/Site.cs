@@ -1,3 +1,4 @@
+using HaloPsa.Api.Converters;
 using System.Text.Json.Serialization;
 
 namespace HaloPsa.Api.Models.Sites;
@@ -28,7 +29,12 @@ public record Site
 	/// <summary>
 	/// The client ID this site belongs to
 	/// </summary>
+	/// <remarks>
+	/// Halo serialises this as a decimal (<c>21.0</c>), so it needs <see cref="FlexibleInt32Converter"/>
+	/// rather than the default int handling, which rejects it and fails the whole response.
+	/// </remarks>
 	[JsonPropertyName("client_id")]
+	[JsonConverter(typeof(FlexibleInt32Converter))]
 	public int ClientId { get; init; }
 
 	/// <summary>
