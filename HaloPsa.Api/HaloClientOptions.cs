@@ -97,9 +97,46 @@ public class HaloClientOptions
 	public bool? ReadOnly { get; init; }
 
 	/// <summary>
-	/// Gets the effective base URL for the Halo API
+	/// Gets the full base URL of the Halo instance, overriding the default
+	/// <c>https://{Account}.halopsa.com</c>.
 	/// </summary>
-	internal string EffectiveBaseUrl => $"https://{Account}.halopsa.com";
+	/// <remarks>
+	/// <para>
+	/// Leave this <see langword="null"/> - the default - for a Halo-hosted PSA tenant, where the account name
+	/// and the <c>halopsa.com</c> domain are enough to reach the instance.
+	/// </para>
+	/// <para>
+	/// Set it when the instance is not at that address. Two cases in practice: an ITSM-branded tenant, which
+	/// Halo hosts at <c>https://{account}.haloitsm.com</c>, and a self-hosted instance at an arbitrary
+	/// hostname. Without this, neither is reachable at all - the default is not a convention that can be worked
+	/// around by choosing a different account name.
+	/// </para>
+	/// <para>
+	/// Give the scheme and host only, with no trailing path: the API paths already carry their own <c>/api</c>
+	/// prefix and authentication posts to <c>/auth/token</c>, both relative to this. A trailing slash is
+	/// accepted and trimmed.
+	/// </para>
+	/// <example>
+	/// <code>
+	/// var options = new HaloClientOptions
+	/// {
+	///     Account = "contosoitsm",
+	///     BaseUrl = "https://contosoitsm.haloitsm.com",
+	///     ClientId = clientId,
+	///     ClientSecret = clientSecret
+	/// };
+	/// </code>
+	/// </example>
+	/// </remarks>
+	public string? BaseUrl { get; init; }
+
+	/// <summary>
+	/// Gets the effective base URL for the Halo API: <see cref="BaseUrl"/> when one was supplied, otherwise
+	/// the Halo-hosted PSA address derived from <see cref="Account"/>.
+	/// </summary>
+	internal string EffectiveBaseUrl => string.IsNullOrWhiteSpace(BaseUrl)
+		? $"https://{Account}.halopsa.com"
+		: BaseUrl.TrimEnd('/');
 
 	internal void Validate()
 	{
@@ -131,6 +168,19 @@ public class HaloClientOptions
 		if (!_guidRegex.IsMatch(ClientId))
 		{
 			throw new FormatException("ClientId must be a valid GUID format (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).");
+		}
+
+		if (!string.IsNullOrWhiteSpace(BaseUrl))
+		{
+			if (!Uri.TryCreate(BaseUrl, UriKind.Absolute, out var baseUri))
+			{
+				throw new FormatException($"BaseUrl must be an absolute URL, for example https://contoso.haloitsm.com. Got: {BaseUrl}");
+			}
+
+			if (baseUri.Scheme != Uri.UriSchemeHttps && baseUri.Scheme != Uri.UriSchemeHttp)
+			{
+				throw new FormatException($"BaseUrl must use http or https. Got scheme: {baseUri.Scheme}");
+			}
 		}
 
 
