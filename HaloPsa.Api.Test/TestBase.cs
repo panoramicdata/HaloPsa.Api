@@ -6,6 +6,11 @@ namespace HaloPsa.Api.Test;
 /// <summary>
 /// Abstract base class for tests that provides common dependencies
 /// </summary>
+/// <remarks>
+/// Every test deriving from this class calls the live HaloPSA API with credentials from user
+/// secrets, which CI does not have. CI excludes them with --filter "Category!=Integration".
+/// </remarks>
+[Trait("Category", "Integration")]
 public abstract class TestBase(IntegrationTestFixture fixture)
 {
 	/// <summary>
