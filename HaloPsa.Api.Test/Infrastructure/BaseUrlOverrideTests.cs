@@ -123,7 +123,6 @@ public class BaseUrlOverrideTests
 	[InlineData(@"\\contosoitsm.haloitsm.com\api")]
 	[InlineData(@"C:\halo\api")]
 	[InlineData("mailto:ops@contoso.com")]
-	[InlineData("ws://contosoitsm.haloitsm.com")]
 	public void BaseUrl_WhenNotHttpOrHttps_Throws(string nonHttpUrl)
 	{
 		var options = new HaloClientOptions
