@@ -170,21 +170,24 @@ public class HaloClientOptions
 			throw new FormatException("ClientId must be a valid GUID format (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).");
 		}
 
-		if (!string.IsNullOrWhiteSpace(BaseUrl))
+		if (!string.IsNullOrWhiteSpace(BaseUrl) && !IsAbsoluteHttpUrl(BaseUrl))
 		{
-			if (!Uri.TryCreate(BaseUrl, UriKind.Absolute, out var baseUri))
-			{
-				throw new FormatException($"BaseUrl must be an absolute URL, for example https://contoso.haloitsm.com. Got: {BaseUrl}");
-			}
-
-			if (baseUri.Scheme != Uri.UriSchemeHttps && baseUri.Scheme != Uri.UriSchemeHttp)
-			{
-				throw new FormatException($"BaseUrl must use http or https. Got scheme: {baseUri.Scheme}");
-			}
+			throw new FormatException($"BaseUrl must be an absolute URL using http or https, for example https://contoso.haloitsm.com. Got: {BaseUrl}");
 		}
-
-
 	}
+
+	/// <summary>
+	/// Returns true only for an absolute URL whose scheme is http or https.
+	/// </summary>
+	/// <remarks>
+	/// <see cref="UriKind.Absolute"/> alone is not enough, and is OS-dependent: on Linux and macOS
+	/// <c>Uri.TryCreate("/api", UriKind.Absolute, ...)</c> succeeds and yields the implicit file URI
+	/// <c>file:///api</c>, whereas on Windows it fails. Requiring the scheme to be http or https rejects
+	/// relative paths, UNC paths and every other scheme identically on every platform.
+	/// </remarks>
+	private static bool IsAbsoluteHttpUrl(string value)
+		=> Uri.TryCreate(value, UriKind.Absolute, out var uri)
+			&& (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp);
 
 	private void ValidateTimings()
 	{

@@ -2,7 +2,10 @@ using AwesomeAssertions;
 
 namespace HaloPsa.Api.Test.Infrastructure;
 
+// Uses the live client from IntegrationTestFixture, which needs HaloPSA credentials from user
+// secrets that CI does not have. CI excludes it with --filter "Category!=Integration".
 [Collection("Integration Tests")]
+[Trait("Category", "Integration")]
 public class HaloClientInfrastructureTests(IntegrationTestFixture fixture)
 {
 	private readonly IntegrationTestFixture _fixture = fixture;

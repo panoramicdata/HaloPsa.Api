@@ -113,13 +113,22 @@ public class BaseUrlOverrideTests
 		_ = act.Should().Throw<FormatException>().WithMessage("*absolute URL*");
 	}
 
-	[Fact]
-	public void BaseUrl_WhenNotHttpOrHttps_Throws()
+	// "/api" above parses as the absolute URI file:///api on Linux and macOS, so relative paths are only
+	// rejected everywhere because the scheme is checked. These pin that down for explicit and implicit
+	// file URIs (including UNC and drive paths) and for other non-http schemes.
+	[Theory]
+	[InlineData("ftp://contosoitsm.haloitsm.com")]
+	[InlineData("file:///api")]
+	[InlineData("file://contosoitsm.haloitsm.com/api")]
+	[InlineData(@"\\contosoitsm.haloitsm.com\api")]
+	[InlineData(@"C:\halo\api")]
+	[InlineData("mailto:ops@contoso.com")]
+	public void BaseUrl_WhenNotHttpOrHttps_Throws(string nonHttpUrl)
 	{
 		var options = new HaloClientOptions
 		{
 			Account = "contosoitsm",
-			BaseUrl = "ftp://contosoitsm.haloitsm.com",
+			BaseUrl = nonHttpUrl,
 			ClientId = ValidClientId,
 			ClientSecret = ValidClientSecret
 		};
