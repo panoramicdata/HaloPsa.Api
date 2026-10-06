@@ -10,7 +10,11 @@ If you discover a security vulnerability, please report it responsibly.
 
 **Do not open a public GitHub issue.**
 
-Instead, please email security@panoramicdata.com with:
+Instead, use GitHub's private vulnerability reporting: open this repository's **Security** tab
+and choose **Report a vulnerability**, or go straight to
+https://github.com/panoramicdata/HaloPsa.Api/security/advisories/new
+
+Please include:
 
 - A description of the vulnerability
 - Steps to reproduce the issue
