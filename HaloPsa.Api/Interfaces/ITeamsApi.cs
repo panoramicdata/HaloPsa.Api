@@ -13,7 +13,7 @@ public interface ITeamsApi
 	/// </summary>
 	/// <param name="cancellationToken">Cancellation token</param>
 	/// <returns>Response containing the list of teams</returns>
-	[Get("/Team")]
+	[Get("/api/Team")]
 	Task<TeamsResponse> GetAllResponseAsync(CancellationToken cancellationToken);
 
 	/// <summary>
@@ -23,6 +23,6 @@ public interface ITeamsApi
 	/// <param name="includeDetails">Whether to include additional details</param>
 	/// <param name="cancellationToken">Cancellation token</param>
 	/// <returns>The team with the specified ID</returns>
-	[Get("/Team/{id}")]
+	[Get("/api/Team/{id}")]
 	Task<Team> GetByIdAsync(int id, [Query] bool includeDetails, CancellationToken cancellationToken);
 }

@@ -8,10 +8,30 @@ namespace HaloPsa.Api.Models.Priorities;
 public record Priority
 {
 	/// <summary>
-	/// The unique identifier for the priority
+	/// The unique identifier of this priority record. Halo keeps one record per SLA, so this is a
+	/// GUID; ticket filters and <c>priority_id</c> on a ticket use <see cref="PriorityId"/>.
 	/// </summary>
 	[JsonPropertyName("id")]
-	public int Id { get; init; }
+	public string Id { get; init; } = string.Empty;
+
+	/// <summary>
+	/// The priority id that tickets carry and ticket filters take. Shared by the same priority
+	/// level across SLAs, so it is not unique within a list of priorities.
+	/// </summary>
+	[JsonPropertyName("priorityid")]
+	public int PriorityId { get; init; }
+
+	/// <summary>
+	/// The SLA this priority record belongs to
+	/// </summary>
+	[JsonPropertyName("slaid")]
+	public int SlaId { get; init; }
+
+	/// <summary>
+	/// Whether this priority is hidden
+	/// </summary>
+	[JsonPropertyName("ishidden")]
+	public bool IsHidden { get; init; }
 
 	/// <summary>
 	/// The name of the priority

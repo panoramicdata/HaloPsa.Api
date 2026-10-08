@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace HaloPsa.Api.Models.Tickets;
@@ -116,9 +117,9 @@ public record Ticket
 	public string? TeamName { get; init; }
 
 	/// <summary>
-	/// The category of the ticket
+	/// The first-level category ID of the ticket
 	/// </summary>
-	[JsonPropertyName("category_id")]
+	[JsonPropertyName("categoryid_1")]
 	public int? CategoryId { get; init; }
 
 	/// <summary>
@@ -177,6 +178,7 @@ public record Ticket
 	/// <summary>
 	/// Whether the ticket is on hold
 	/// </summary>
+	[JsonPropertyName("onhold")]
 	public bool IsOnHold { get; init; }
 
 	/// <summary>
@@ -194,4 +196,11 @@ public record Ticket
 	/// Tags associated with this ticket
 	/// </summary>
 	public IReadOnlyList<string>? Tags { get; init; }
+
+	/// <summary>
+	/// Every field Halo returned that this record does not model, such as the SLA dates and state
+	/// and <c>timetaken</c>.
+	/// </summary>
+	[JsonExtensionData]
+	public Dictionary<string, JsonElement>? AdditionalProperties { get; init; }
 }

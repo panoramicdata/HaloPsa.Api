@@ -13,7 +13,7 @@ public interface IStatusesApi
 	/// </summary>
 	/// <param name="cancellationToken">Cancellation token</param>
 	/// <returns>Response containing the list of statuses</returns>
-	[Get("/Status")]
+	[Get("/api/Status")]
 	Task<StatusesResponse> GetAllResponseAsync(CancellationToken cancellationToken);
 
 	/// <summary>
@@ -23,6 +23,6 @@ public interface IStatusesApi
 	/// <param name="includeDetails">Whether to include additional details</param>
 	/// <param name="cancellationToken">Cancellation token</param>
 	/// <returns>The status with the specified ID</returns>
-	[Get("/Status/{id}")]
+	[Get("/api/Status/{id}")]
 	Task<Status> GetByIdAsync(int id, [Query] bool includeDetails, CancellationToken cancellationToken);
 }

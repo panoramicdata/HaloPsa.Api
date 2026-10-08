@@ -317,7 +317,6 @@ public class TicketModelTests
 		_ = filter.EndDate.Should().NotBeNull();
 		_ = filter.OpenOnly.Should().BeTrue();
 		_ = filter.MyTickets.Should().BeTrue();
-		_ = filter.IncludeDetails.Should().BeTrue();
 		_ = filter.Order.Should().Be("dateoccurred");
 		_ = filter.OrderDesc.Should().BeTrue();
 		_ = filter.AssetId.Should().Be(100);
@@ -350,7 +349,6 @@ public class TicketModelTests
 			EndDate = endDate,
 			OpenOnly = true,
 			MyTickets = true,
-			IncludeDetails = true,
 			Order = "dateoccurred",
 			OrderDesc = true,
 			AssetId = 100,

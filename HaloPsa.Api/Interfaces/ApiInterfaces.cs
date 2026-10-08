@@ -161,9 +161,6 @@ public interface IProjectsRefitApi
     Task<Project> GetByIdAsync(int id, CancellationToken cancellationToken);
 }
 
-/// <summary>Interface for action management operations</summary>
-public interface IActionsApi { }
-
 /// <summary>Interface for attachment operations</summary>
 public interface IAttachmentsApi { }
 

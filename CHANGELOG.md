@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (#72)
+- `TicketFilter` is now sent under Halo's parameter names (`client_id`, `requesttype_id`, `open_only`, `pageinate`, `page_size`, `mine`, `lastupdatefromdate` and others). Before this, Halo silently ignored most filters and returned unfiltered results.
+- `StartDate`/`EndDate` are sent with `datesearch` (defaulting to the opened date) in `yyyy-MM-ddTHH:mm:ss` format.
+- Statuses, Priorities, Categories and Teams now request `/api/...` instead of a path outside the API. Statuses and Priorities also accept Halo's plain-array response.
+- `Ticket.CategoryId` is read from `categoryid_1` and `Ticket.IsOnHold` from `onhold`.
+
+### Added
+- `Ticket.AdditionalProperties` keeps every field the model does not declare (SLA dates and state, `timetaken` and others).
+- `TicketFilter.DateSearch` (see `TicketDateSearch`), `SearchSummary`, `IncludeSlaTimer` and `IncludeTimeTaken`.
+- `Psa.Actions`: read-only `GET /api/Actions` returning `TicketAction` records.
+- `Psa.Priorities`.
+
+### Changed
+- `Priority.Id` is now the record's GUID string, matching the live API. Use `Priority.PriorityId` for ticket filters. `PrioritiesApiWrapper.GetByIdAsync` takes a string id.
+- `TicketFilter.UnassignedOnly`, `IncludeDetails` and `IncludeChildren` are obsolete and never sent, because Halo's ticket list has no matching flag.
+
 ### Added
 - Initial release of HaloPsa.Api - comprehensive .NET library for Halo PSA API
 - Complete PSA module implementation with full CRUD operations
