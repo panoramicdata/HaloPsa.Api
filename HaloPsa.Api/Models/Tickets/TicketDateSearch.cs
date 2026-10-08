@@ -12,10 +12,10 @@ public static class TicketDateSearch
 	/// <summary>
 	/// The date the ticket was opened.
 	/// </summary>
-	public const string DateOccurred = "dateoccured";
+	public static string DateOccurred { get; } = "dateoccured";
 
 	/// <summary>
 	/// The date the ticket was closed.
 	/// </summary>
-	public const string DateClosed = "datecleared";
+	public static string DateClosed { get; } = "datecleared";
 }
