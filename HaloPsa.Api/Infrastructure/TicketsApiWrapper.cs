@@ -26,7 +26,14 @@ public class TicketsApiWrapper(ITicketsApi ticketsApi, bool? readOnly = null) : 
 
 	/// <inheritdoc />
 	public Task<TicketsResponse> GetAllAsync(TicketFilter? filter, CancellationToken cancellationToken)
-		=> ticketsApi.GetAllAsync(filter, cancellationToken);
+		=> ticketsApi.GetAllAsync(WithDefaultDateSearch(filter), cancellationToken);
+
+	// Halo applies startdate/enddate to whichever column datesearch names, so dates without it
+	// would not mean "created", as TicketFilter documents.
+	internal static TicketFilter? WithDefaultDateSearch(TicketFilter? filter)
+		=> filter is { DateSearch: null } && (filter.StartDate.HasValue || filter.EndDate.HasValue)
+			? filter with { DateSearch = TicketDateSearch.DateOccurred }
+			: filter;
 
 	/// <inheritdoc />
 	public Task<TicketsResponse> GetAllAsync(CancellationToken cancellationToken)

@@ -28,6 +28,17 @@ public interface IPsaApi
 	StatusesApiWrapper Statuses { get; }
 
 	/// <summary>
+	/// Gets the Priorities API, which lists priorities per SLA so a priority name can be resolved to
+	/// the <c>priorityid</c> that ticket filters take.
+	/// </summary>
+	PrioritiesApiWrapper Priorities { get; }
+
+	/// <summary>
+	/// Gets the Actions API, which reads a ticket's notes and history. Read-only.
+	/// </summary>
+	ActionsApiWrapper Actions { get; }
+
+	/// <summary>
 	/// Gets the Users API for user management operations
 	/// </summary>
 	UsersApiWrapper Users { get; }

@@ -23,6 +23,8 @@ internal sealed class PsaApi(HttpClient _httpClient, bool? readOnly = null) : IP
 	public AssetsApiWrapper Assets { get; } = new Lazy<AssetsApiWrapper>(() => new AssetsApiWrapper(RestService.For<IAssetsRefitApi>(_httpClient, _refitSettings))).Value;
 	public ProjectsApiWrapper Projects { get; } = new Lazy<ProjectsApiWrapper>(() => new ProjectsApiWrapper(RestService.For<IProjectsRefitApi>(_httpClient, _refitSettings))).Value;
 	public StatusesApiWrapper Statuses { get; } = new Lazy<StatusesApiWrapper>(() => new StatusesApiWrapper(RestService.For<IStatusesApi>(_httpClient, _refitSettings))).Value;
+	public PrioritiesApiWrapper Priorities { get; } = new PrioritiesApiWrapper(RestService.For<IPrioritiesApi>(_httpClient, _refitSettings));
+	public ActionsApiWrapper Actions { get; } = new ActionsApiWrapper(RestService.For<IActionsApi>(_httpClient, _refitSettings));
 	public SitesApiWrapper Sites { get; } = new Lazy<SitesApiWrapper>(() => new SitesApiWrapper(RestService.For<ISitesApi>(_httpClient, _refitSettings))).Value;
 
 	/// <summary>
