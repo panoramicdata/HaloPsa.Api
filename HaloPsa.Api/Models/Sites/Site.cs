@@ -1,4 +1,5 @@
 using HaloPsa.Api.Converters;
+using HaloPsa.Api.Models.CustomFields;
 using System.Text.Json.Serialization;
 
 namespace HaloPsa.Api.Models.Sites;
@@ -126,4 +127,13 @@ public record Site
 	/// </summary>
 	[JsonPropertyName("ismainsite")]
 	public bool IsMainSite { get; init; }
+
+	/// <summary>
+	/// The custom field values on this site
+	/// </summary>
+	/// <remarks>
+	/// Halo only returns custom fields that were asked for, via <see cref="SiteFilter.IncludeCustomFields"/>.
+	/// </remarks>
+	[JsonPropertyName("customfields")]
+	public IReadOnlyList<CustomFieldValue>? CustomFields { get; init; }
 }

@@ -1,3 +1,4 @@
+using HaloPsa.Api.Models.CustomFields;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -182,10 +183,16 @@ public record Ticket
 	public bool IsOnHold { get; init; }
 
 	/// <summary>
-	/// Custom fields for the ticket (as raw JSON object)
+	/// Custom fields for the ticket, as returned in the ticket's <c>customfields</c> array
 	/// </summary>
+	/// <remarks>
+	/// <para>BREAKING CHANGE: this was <see cref="object"/> and is now a typed list. Code that cast or
+	/// inspected the old value as a raw JSON object needs to read <see cref="CustomFieldValue"/> instead.</para>
+	/// <para>Halo only returns custom fields that were asked for, via <see cref="TicketFilter.IncludeCustomFields"/>;
+	/// otherwise this is <see langword="null"/>.</para>
+	/// </remarks>
 	[JsonPropertyName("customfields")]
-	public object? CustomFields { get; init; }
+	public IReadOnlyList<CustomFieldValue>? CustomFields { get; init; }
 
 	/// <summary>
 	/// List of assets associated with this ticket
