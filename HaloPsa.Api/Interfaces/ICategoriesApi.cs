@@ -16,7 +16,7 @@ public interface ICategoriesApi
 	/// <param name="cancellationToken">Cancellation token</param>
 	/// <returns>Response containing the list of categories</returns>
 	[Get("/api/Category")]
-	Task<CategoriesResponse> GetAllResponseAsync([Query] int? ticketTypeId, [Query] int? teamId, CancellationToken cancellationToken);
+	Task<CategoriesResponse> GetAllResponseAsync([Query][AliasAs("tickettype_id")] int? ticketTypeId, [Query][AliasAs("team_id")] int? teamId, CancellationToken cancellationToken);
 
 	/// <summary>
 	/// Gets a specific category by ID
@@ -26,5 +26,5 @@ public interface ICategoriesApi
 	/// <param name="cancellationToken">Cancellation token</param>
 	/// <returns>The category with the specified ID</returns>
 	[Get("/api/Category/{id}")]
-	Task<Category> GetByIdAsync(int id, [Query] bool includeDetails, CancellationToken cancellationToken);
+	Task<Category> GetByIdAsync(int id, [Query][AliasAs("includedetails")] bool includeDetails, CancellationToken cancellationToken);
 }

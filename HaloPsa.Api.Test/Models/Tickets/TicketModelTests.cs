@@ -1,4 +1,5 @@
 using AwesomeAssertions;
+using HaloPsa.Api.Models.CustomFields;
 using HaloPsa.Api.Models.Tickets;
 
 namespace HaloPsa.Api.Test.Models.Tickets;
@@ -120,7 +121,7 @@ public class TicketModelTests
 			DateClosed = now.AddHours(2),
 			Source = 1,
 			IsOnHold = false,
-			CustomFields = new Dictionary<string, object?> { ["CustomField1"] = "Value1" },
+			CustomFields = new List<CustomFieldValue> { new() { Id = 1, Name = "CustomField1" } }.AsReadOnly(),
 			AssetIds = new List<int> { 1, 2, 3 }.AsReadOnly(),
 			Tags = new List<string> { "urgent", "hardware" }.AsReadOnly()
 		};

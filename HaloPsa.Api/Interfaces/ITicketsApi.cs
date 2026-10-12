@@ -37,7 +37,7 @@ public interface ITicketsApi
 	[Get("/api/Tickets/{id}")]
 	Task<Ticket> GetByIdAsync(
 		int id,
-		[Query] bool includeDetails,
+		[Query][AliasAs("includedetails")] bool includeDetails,
 		CancellationToken cancellationToken);
 
 	/// <summary>

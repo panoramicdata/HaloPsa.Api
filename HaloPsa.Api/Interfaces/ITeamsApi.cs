@@ -24,5 +24,5 @@ public interface ITeamsApi
 	/// <param name="cancellationToken">Cancellation token</param>
 	/// <returns>The team with the specified ID</returns>
 	[Get("/api/Team/{id}")]
-	Task<Team> GetByIdAsync(int id, [Query] bool includeDetails, CancellationToken cancellationToken);
+	Task<Team> GetByIdAsync(int id, [Query][AliasAs("includedetails")] bool includeDetails, CancellationToken cancellationToken);
 }
