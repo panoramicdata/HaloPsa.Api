@@ -24,5 +24,5 @@ public interface IPrioritiesApi
 	/// <param name="cancellationToken">Cancellation token</param>
 	/// <returns>The priority with the specified ID</returns>
 	[Get("/api/Priority/{id}")]
-	Task<Priority> GetByIdAsync(string id, [Query] bool includeDetails, CancellationToken cancellationToken);
+	Task<Priority> GetByIdAsync(string id, [Query][AliasAs("includedetails")] bool includeDetails, CancellationToken cancellationToken);
 }

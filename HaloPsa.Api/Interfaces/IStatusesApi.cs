@@ -24,5 +24,5 @@ public interface IStatusesApi
 	/// <param name="cancellationToken">Cancellation token</param>
 	/// <returns>The status with the specified ID</returns>
 	[Get("/api/Status/{id}")]
-	Task<Status> GetByIdAsync(int id, [Query] bool includeDetails, CancellationToken cancellationToken);
+	Task<Status> GetByIdAsync(int id, [Query][AliasAs("includedetails")] bool includeDetails, CancellationToken cancellationToken);
 }
