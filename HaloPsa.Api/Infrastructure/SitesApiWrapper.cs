@@ -15,7 +15,7 @@ public class SitesApiWrapper(ISitesApi sitesApi) : ISitesApi
 	public const int DefaultPageSize = 100;
 
 	/// <summary>
-	/// The most pages <see cref="GetAllPagedAsync"/> will request before giving up
+	/// The most pages <see cref="GetAllPagedAsync"/> will request in one pass before giving up
 	/// </summary>
 	/// <remarks>
 	/// At the default page size this allows up to 100,000 sites (50,000 if Halo caps pages at 50), far beyond any
@@ -24,6 +24,12 @@ public class SitesApiWrapper(ISitesApi sitesApi) : ISitesApi
 	/// waiting for this limit.
 	/// </remarks>
 	public const int MaxPages = 1000;
+
+	/// <summary>
+	/// How many times <see cref="GetAllPagedAsync"/> starts the listing again because Halo's reported total changed
+	/// part-way through, before giving up
+	/// </summary>
+	public const int MaxAttempts = 3;
 
 	/// <summary>
 	/// Gets all sites as a convenient list
@@ -49,40 +55,63 @@ public class SitesApiWrapper(ISitesApi sitesApi) : ISitesApi
 		=> GetAllPagedAsync(new SiteFilter { ClientId = clientId, IncludeInactive = false }, cancellationToken);
 
 	/// <summary>
-	/// Gets every site matching the filter by requesting pages until the reported total has been collected
+	/// Gets every site matching the filter, reading page by page until Halo returns an empty page, and checks the
+	/// result against the total Halo reports
 	/// </summary>
 	/// <remarks>
 	/// <para>Pagination is always switched on, whatever <see cref="SiteFilter.Paginate"/> and
 	/// <see cref="SiteFilter.PageNo"/> say, and <see cref="SiteFilter.Count"/> is not sent, because paging decides
 	/// how many rows come back. <see cref="SiteFilter.PageSize"/> is used when set and
 	/// <see cref="DefaultPageSize"/> otherwise.</para>
-	/// <para>With <c>pageinate=true</c> Halo reports the TOTAL number of matching sites in
-	/// <see cref="SitesResponse.RecordCount"/> on every page (checked against a live tenant: 62 sites gave
-	/// <c>record_count: 62</c> on each page, however the page size was set). Pages are requested until the most
-	/// recently reported total has been collected. The most recent non-zero total is used rather than the first,
-	/// so a site added or removed while the listing is in progress moves the target with it, and a page reporting
-	/// zero does not discard it. This does not depend on Halo honouring the page size, which matters because it
-	/// may return fewer rows per page than were asked for.</para>
-	/// <para>When Halo reports no total at all, pages are requested until one comes back empty. That costs one
-	/// request more than stopping at the first short page, but a short page cannot be told apart from Halo capping
-	/// the page size, and stopping there is exactly how a list silently ends at 50.</para>
-	/// <para>A site that appears on two pages - one created or reordered while the listing is in progress - is
-	/// returned once. A page made up entirely of sites already received means Halo is ignoring <c>page_no</c>,
-	/// and throws.</para>
+	/// <para><b>It reads to an empty page and never stops on the total alone.</b> With <c>pageinate=true</c> Halo
+	/// reports the TOTAL number of matching sites in <see cref="SitesResponse.RecordCount"/> on every page (checked
+	/// against a live tenant: 62 sites gave <c>record_count: 62</c> on each page, however the page size was set).
+	/// That total is used only as a cross-check, because stopping on it cannot prove the list is complete: a total
+	/// lower than the rows the filter really matches would end the listing early with no error.</para>
+	/// <para><b>A total that moves restarts the listing.</b> Pages are offsets into a list that can change while it
+	/// is being read. A site added or deleted part-way through shifts every later row, so one row is skipped or
+	/// served twice, and the two cases can look identical from here. The total changes in both, so any page reporting
+	/// a different non-zero total from page 1 starts the listing again, up to <see cref="MaxAttempts"/> times. A page
+	/// reporting zero (Halo's answer past the end) is ignored.</para>
+	/// <para><b>A finished listing must match its total.</b> If the collected count differs from the total, the
+	/// pages did not line up - for instance Halo worked out offsets from a different page size than it returned -
+	/// and the call throws rather than return a list it knows is incomplete. When Halo reports no total at all there
+	/// is nothing to check against, and the empty page is the only end; that assumes Halo offsets pages by the size
+	/// it returns, which held on the live tenant.</para>
+	/// <para>A site seen twice is returned once. A page made up entirely of sites already received, with the total
+	/// unchanged, means Halo is ignoring <c>page_no</c>, and throws.</para>
 	/// </remarks>
 	/// <param name="filter">Filter options, or <see langword="null"/> for every site</param>
 	/// <param name="cancellationToken">Cancellation token</param>
 	/// <returns>Every matching site</returns>
-	/// <exception cref="InvalidOperationException">A page held only sites already received, which means Halo is
-	/// ignoring <c>page_no</c>; an empty page arrived before the reported total was reached, which means the
-	/// pages did not line up and the list would be incomplete; or more than <see cref="MaxPages"/> pages were
-	/// needed</exception>
+	/// <exception cref="InvalidOperationException">Halo is ignoring <c>page_no</c>; the collected sites did not
+	/// match the reported total; the total kept changing for <see cref="MaxAttempts"/> attempts; or more than
+	/// <see cref="MaxPages"/> pages were needed</exception>
 	public async Task<IReadOnlyList<Site>> GetAllPagedAsync(SiteFilter? filter, CancellationToken cancellationToken)
 	{
 		var pageSize = filter?.PageSize is > 0 ? filter.PageSize.Value : DefaultPageSize;
+
+		for (var attempt = 1; attempt <= MaxAttempts; attempt++)
+		{
+			var (sites, totalMoved) = await ReadEveryPageAsync(filter, pageSize, cancellationToken);
+			if (!totalMoved)
+			{
+				return sites;
+			}
+		}
+
+		throw new InvalidOperationException(
+			$"The site list kept changing while it was being read ({MaxAttempts} attempts); stopping rather than return a list that may be incomplete.");
+	}
+
+	private async Task<(IReadOnlyList<Site> Sites, bool TotalMoved)> ReadEveryPageAsync(
+		SiteFilter? filter,
+		int pageSize,
+		CancellationToken cancellationToken)
+	{
 		var sites = new List<Site>();
 		var seenIds = new HashSet<int>();
-		var reportedTotal = 0;
+		int? firstTotal = null;
 
 		for (var pageNo = 1; pageNo <= MaxPages; pageNo++)
 		{
@@ -95,24 +124,26 @@ public class SitesApiWrapper(ISitesApi sitesApi) : ISitesApi
 			};
 
 			var response = await sitesApi.GetAllResponseAsync(pageFilter, cancellationToken);
+
 			if (response.RecordCount > 0)
 			{
-				reportedTotal = response.RecordCount;
+				firstTotal ??= response.RecordCount;
+				if (response.RecordCount != firstTotal)
+				{
+					return (sites, true);
+				}
 			}
 
 			if (response.Sites.Count == 0)
 			{
-				// Halo works out a page's offset itself. If it did so from a different page size than it returned,
-				// whole runs of sites are skipped and the listing simply runs out early - so an empty page before the
-				// total is reached is a fault, not the end of the data.
-				if (sites.Count < reportedTotal)
+				if (firstTotal is { } total && sites.Count != total)
 				{
 					throw new InvalidOperationException(
-						$"Halo reported {reportedTotal} sites but returned an empty page {pageNo} after {sites.Count}; the pages "
+						$"Halo reported {total} sites but {sites.Count} were returned before the empty page {pageNo}; the pages "
 						+ "did not line up, so the list would be incomplete.");
 				}
 
-				return sites;
+				return (sites, false);
 			}
 
 			var newSites = response.Sites.Where(site => seenIds.Add(site.Id)).ToList();
@@ -123,12 +154,6 @@ public class SitesApiWrapper(ISitesApi sitesApi) : ISitesApi
 			}
 
 			sites.AddRange(newSites);
-
-			// With no total reported, only an empty page ends the listing - see the remarks.
-			if (reportedTotal > 0 && sites.Count >= reportedTotal)
-			{
-				return sites;
-			}
 		}
 
 		throw new InvalidOperationException(

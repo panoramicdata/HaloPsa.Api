@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace HaloPsa.Api.Models.Tickets;
 
 /// <summary>
@@ -11,18 +13,26 @@ public record TicketsResponse
 	public required IReadOnlyList<Ticket> Tickets { get; init; } = [];
 
 	/// <summary>
-	/// Total number of tickets available (for pagination)
+	/// Halo's <c>record_count</c>: the TOTAL number of matching tickets when the request used
+	/// <c>pageinate=true</c>, but only the number of tickets in this response when it did not
 	/// </summary>
+	/// <remarks>
+	/// Checked against a live tenant (October 2026): 51 tickets gave <c>record_count: 51</c> paged with a page
+	/// size of 1 or 2, and <c>record_count: 2</c> unpaged with <c>count=2</c>. So a total needs pagination.
+	/// </remarks>
+	[JsonPropertyName("record_count")]
 	public int RecordCount { get; init; }
 
 	/// <summary>
 	/// Current page number (when using pagination)
 	/// </summary>
+	[JsonPropertyName("page_no")]
 	public int? PageNo { get; init; }
 
 	/// <summary>
 	/// Page size used (when using pagination)
 	/// </summary>
+	[JsonPropertyName("page_size")]
 	public int? PageSize { get; init; }
 
 	/// <summary>

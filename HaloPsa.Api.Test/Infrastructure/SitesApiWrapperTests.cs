@@ -68,7 +68,7 @@ public class SitesApiWrapperTests
 	}
 
 	[Fact]
-	public async Task GetAllPagedAsync_WhenHaloReportsTheTotal_RequestsEachPageAndReturnsEverySite()
+	public async Task GetAllPagedAsync_WhenHaloReportsTheTotal_ReadsToTheEmptyPageAndReturnsEverySite()
 	{
 		var handler = new CapturingHandler(SimulatedHalo(totalSites: 237));
 		var wrapper = new SitesApiWrapper(CreateClient<ISitesApi>(handler));
@@ -80,11 +80,12 @@ public class SitesApiWrapperTests
 		_ = handler.Requests.Select(r => r.Query).Should().Equal(
 			"?pageinate=True&page_no=1&page_size=100",
 			"?pageinate=True&page_no=2&page_size=100",
-			"?pageinate=True&page_no=3&page_size=100");
+			"?pageinate=True&page_no=3&page_size=100",
+			"?pageinate=True&page_no=4&page_size=100");
 	}
 
 	[Fact]
-	public async Task GetAllPagedAsync_WhenTheTotalIsAnExactMultipleOfThePageSize_StopsWithoutAnExtraRequest()
+	public async Task GetAllPagedAsync_WhenTheTotalIsAnExactMultipleOfThePageSize_StillEndsOnTheEmptyPage()
 	{
 		var handler = new CapturingHandler(SimulatedHalo(totalSites: 200));
 		var wrapper = new SitesApiWrapper(CreateClient<ISitesApi>(handler));
@@ -92,14 +93,13 @@ public class SitesApiWrapperTests
 		var sites = await wrapper.GetAllPagedAsync(filter: null, CancellationToken.None);
 
 		_ = sites.Should().HaveCount(200);
-		_ = handler.Requests.Should().HaveCount(2);
+		_ = handler.Requests.Should().HaveCount(3);
 	}
 
 	[Fact]
 	public async Task GetAllPagedAsync_WhenHaloCapsThePageBelowTheRequestedSize_StillCollectsEverySite()
 	{
-		// Halo is asked for 100 per page but only ever returns 50. A stop-on-short-page rule would quit after
-		// the first page; the reported total is what keeps this going.
+		// Halo is asked for 100 per page but only ever returns 50, offsetting by the 50 it returned.
 		var handler = new CapturingHandler(SimulatedHalo(totalSites: 120, maxPageSize: 50));
 		var wrapper = new SitesApiWrapper(CreateClient<ISitesApi>(handler));
 
@@ -107,10 +107,7 @@ public class SitesApiWrapperTests
 
 		_ = sites.Should().HaveCount(120);
 		_ = sites.Select(s => s.Id).Should().OnlyHaveUniqueItems();
-		_ = handler.Requests.Select(r => r.Query).Should().Equal(
-			"?pageinate=True&page_no=1&page_size=100",
-			"?pageinate=True&page_no=2&page_size=100",
-			"?pageinate=True&page_no=3&page_size=100");
+		_ = handler.Requests.Should().HaveCount(4);
 	}
 
 	[Fact]
@@ -135,8 +132,20 @@ public class SitesApiWrapperTests
 		var sites = await wrapper.GetAllPagedAsync(filter, CancellationToken.None);
 
 		_ = sites.Should().HaveCount(2);
-		_ = handler.Requests.Should().HaveCount(1);
-		_ = handler.LastRequest.Query.Should().Be("?pageinate=True&page_no=1&page_size=10&client_id=5&include_custom_fields=518");
+		_ = handler.Requests.Select(r => r.Query).Should().Equal(
+			"?pageinate=True&page_no=1&page_size=10&client_id=5&include_custom_fields=518",
+			"?pageinate=True&page_no=2&page_size=10&client_id=5&include_custom_fields=518");
+	}
+
+	[Fact]
+	public async Task GetAllPagedAsync_DoesNotSendTheCallersCount()
+	{
+		var handler = new CapturingHandler(SimulatedHalo(totalSites: 3));
+		var wrapper = new SitesApiWrapper(CreateClient<ISitesApi>(handler));
+
+		_ = await wrapper.GetAllPagedAsync(new SiteFilter { Count = 500 }, CancellationToken.None);
+
+		_ = handler.Requests.Should().OnlyContain(r => CapturingHandler.ParseQuery(r)["count"] == null);
 	}
 
 	[Fact]
@@ -170,55 +179,97 @@ public class SitesApiWrapperTests
 
 		var act = () => wrapper.GetAllPagedAsync(filter: null, CancellationToken.None);
 
-		_ = await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*reported 120 sites but returned an empty page 3 after 70*");
+		_ = await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*reported 120 sites but 70 were returned before the empty page 3*");
 	}
 
 	[Fact]
-	public async Task GetAllPagedAsync_WhenOneSiteShiftsOntoTheNextPage_ReturnsItOnceAndCarriesOn()
+	public async Task GetAllPagedAsync_WhenTheTotalIsLowerThanTheRowsReturned_ThrowsRatherThanStopEarly()
 	{
-		// A site created mid-listing pushes site 100 onto page 2 as well.
+		// 250 rows exist but Halo reports 200. Stopping on the total would silently drop 50.
 		var handler = new CapturingHandler(request =>
 		{
 			var pageNo = int.Parse(CapturingHandler.ParseQuery(request.RequestUri!)["page_no"]!);
-			return pageNo == 1
-				? SitesJson(100, firstId: 1, recordCount: 199)
-				: SitesJson(100, firstId: 100, recordCount: 199);
+			var skipped = (pageNo - 1) * 100;
+			var onThisPage = Math.Clamp(250 - skipped, 0, 100);
+			return SitesJson(onThisPage, firstId: skipped + 1, recordCount: onThisPage == 0 ? 0 : 200);
 		});
+		var wrapper = new SitesApiWrapper(CreateClient<ISitesApi>(handler));
+
+		var act = () => wrapper.GetAllPagedAsync(filter: null, CancellationToken.None);
+
+		_ = await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*reported 200 sites but 250 were returned*");
+	}
+
+	[Fact]
+	public async Task GetAllPagedAsync_WhenASiteIsDeletedFromAnEarlierPageMidListing_RestartsAndReturnsEverySurvivingSite()
+	{
+		// 150 sites. Site 50 is deleted after page 1 is served, so every later row moves back one: without a restart
+		// site 101 would never be served and deleted site 50 would be returned.
+		var live = new SimulatedSiteList(Enumerable.Range(1, 150));
+		live.AfterRequest(1, list => list.Remove(50));
+		var handler = new CapturingHandler(live.Respond);
 		var wrapper = new SitesApiWrapper(CreateClient<ISitesApi>(handler));
 
 		var sites = await wrapper.GetAllPagedAsync(filter: null, CancellationToken.None);
 
-		_ = sites.Should().HaveCount(199);
-		_ = sites.Select(s => s.Id).Should().OnlyHaveUniqueItems();
+		_ = sites.Select(s => s.Id).Should().BeEquivalentTo(Enumerable.Range(1, 150).Where(id => id != 50));
 	}
 
 	[Fact]
-	public async Task GetAllPagedAsync_WhenALaterPageReportsNoTotal_KeepsTheLastTotalReported()
+	public async Task GetAllPagedAsync_WhenASiteIsAddedAtTheFrontMidListing_RestartsAndReturnsEverySite()
 	{
-		// Pages are capped at 50 while 100 are requested. If page 2's zero total were taken as "no total", the
-		// listing would lose its target part-way through.
+		var live = new SimulatedSiteList(Enumerable.Range(1, 150));
+		live.AfterRequest(1, list => list.Insert(0, 1000));
+		var handler = new CapturingHandler(live.Respond);
+		var wrapper = new SitesApiWrapper(CreateClient<ISitesApi>(handler));
+
+		var sites = await wrapper.GetAllPagedAsync(filter: null, CancellationToken.None);
+
+		_ = sites.Select(s => s.Id).Should().BeEquivalentTo(Enumerable.Range(1, 150).Append(1000));
+	}
+
+	[Fact]
+	public async Task GetAllPagedAsync_WhenTheTotalNeverSettles_ThrowsAfterMaxAttempts()
+	{
+		// A site is added after every request, so every pass sees the total move.
+		var live = new SimulatedSiteList(Enumerable.Range(1, 150));
+		var nextId = 10_000;
+		live.AfterEveryRequest(list => list.Add(nextId++));
+		var handler = new CapturingHandler(live.Respond);
+		var wrapper = new SitesApiWrapper(CreateClient<ISitesApi>(handler));
+
+		var act = () => wrapper.GetAllPagedAsync(filter: null, CancellationToken.None);
+
+		_ = await act.Should().ThrowAsync<InvalidOperationException>().WithMessage($"*kept changing*{SitesApiWrapper.MaxAttempts} attempts*");
+	}
+
+	[Fact]
+	public async Task GetAllPagedAsync_WhenOnePageReportsAZeroTotal_IgnoresIt()
+	{
+		// Halo answers record_count: 0 past the end of the list. A zero on a page with rows must not count as the
+		// total moving - remove the RecordCount > 0 check and this restarts until it gives up.
 		var handler = new CapturingHandler(request =>
 		{
 			var pageNo = int.Parse(CapturingHandler.ParseQuery(request.RequestUri!)["page_no"]!);
 			return pageNo switch
 			{
-				1 => SitesJson(50, firstId: 1, recordCount: 120),
-				2 => SitesJson(50, firstId: 51, recordCount: 0),
-				_ => SitesJson(20, firstId: 101, recordCount: 120),
+				1 => SitesJson(100, firstId: 1, recordCount: 150),
+				2 => SitesJson(50, firstId: 101, recordCount: 0),
+				_ => SitesJson(0, firstId: 151, recordCount: 0),
 			};
 		});
 		var wrapper = new SitesApiWrapper(CreateClient<ISitesApi>(handler));
 
 		var sites = await wrapper.GetAllPagedAsync(filter: null, CancellationToken.None);
 
-		_ = sites.Should().HaveCount(120);
+		_ = sites.Should().HaveCount(150);
 		_ = handler.Requests.Should().HaveCount(3);
 	}
 
 	[Fact]
 	public async Task GetAllPagedAsync_WhenTheTotalIsNeverReached_StopsAtTheMaxPagesBackstop()
 	{
-		// Every page is new, but the total is unreachable, so only the backstop can end it.
+		// Every page is new and never empty, so only the backstop can end it.
 		var handler = new CapturingHandler(request =>
 		{
 			var pageNo = int.Parse(CapturingHandler.ParseQuery(request.RequestUri!)["page_no"]!);
@@ -266,36 +317,6 @@ public class SitesApiWrapperTests
 	}
 
 	[Fact]
-	public async Task GetAllPagedAsync_WhenASiteIsDeletedMidListing_FinishesAtTheNewTotal()
-	{
-		// 150 sites; one is deleted after page 1, so page 2 holds the remaining 49 and reports 149.
-		var handler = new CapturingHandler(request =>
-		{
-			var pageNo = int.Parse(CapturingHandler.ParseQuery(request.RequestUri!)["page_no"]!);
-			return pageNo == 1
-				? SitesJson(100, firstId: 1, recordCount: 150)
-				: SitesJson(49, firstId: 102, recordCount: 149);
-		});
-		var wrapper = new SitesApiWrapper(CreateClient<ISitesApi>(handler));
-
-		var sites = await wrapper.GetAllPagedAsync(filter: null, CancellationToken.None);
-
-		_ = sites.Should().HaveCount(149);
-		_ = handler.Requests.Should().HaveCount(2);
-	}
-
-	[Fact]
-	public async Task GetAllPagedAsync_DoesNotSendTheCallersCount()
-	{
-		var handler = new CapturingHandler(SimulatedHalo(totalSites: 3));
-		var wrapper = new SitesApiWrapper(CreateClient<ISitesApi>(handler));
-
-		_ = await wrapper.GetAllPagedAsync(new SiteFilter { Count = 500 }, CancellationToken.None);
-
-		_ = CapturingHandler.ParseQuery(handler.LastRequest)["count"].Should().BeNull();
-	}
-
-	[Fact]
 	public async Task GetAllAsync_ForAClient_PagesAndFiltersByClientId()
 	{
 		var handler = new CapturingHandler(SimulatedHalo(totalSites: 105));
@@ -306,11 +327,12 @@ public class SitesApiWrapperTests
 		_ = sites.Should().HaveCount(105);
 		_ = handler.Requests.Select(r => r.Query).Should().Equal(
 			"?pageinate=True&page_no=1&page_size=100&client_id=5&includeinactive=False",
-			"?pageinate=True&page_no=2&page_size=100&client_id=5&includeinactive=False");
+			"?pageinate=True&page_no=2&page_size=100&client_id=5&includeinactive=False",
+			"?pageinate=True&page_no=3&page_size=100&client_id=5&includeinactive=False");
 	}
 
 	[Fact]
-	public async Task GetAllAsync_WithNoClient_Pages()
+	public async Task GetAllAsync_WithNoClient_PagesAndExcludesInactiveAsBefore()
 	{
 		var handler = new CapturingHandler(SimulatedHalo(totalSites: 3));
 		var wrapper = new SitesApiWrapper(CreateClient<ISitesApi>(handler));
@@ -318,7 +340,41 @@ public class SitesApiWrapperTests
 		var sites = await wrapper.GetAllAsync(CancellationToken.None);
 
 		_ = sites.Should().HaveCount(3);
-		_ = handler.LastRequest.Query.Should().Be("?pageinate=True&page_no=1&page_size=100&includeinactive=False");
+		_ = handler.Requests[0].Query.Should().Be("?pageinate=True&page_no=1&page_size=100&includeinactive=False");
+	}
+
+	/// <summary>
+	/// A list that changes between requests, served the way Halo serves it: page N is the rows at offset
+	/// (N - 1) * page_size of the list as it is at that moment, with record_count its current length.
+	/// </summary>
+	private sealed class SimulatedSiteList(IEnumerable<int> ids)
+	{
+		private readonly List<int> _ids = [.. ids];
+		private readonly Dictionary<int, Action<List<int>>> _afterRequest = [];
+		private Action<List<int>>? _afterEveryRequest;
+		private int _requests;
+
+		public void AfterRequest(int requestNumber, Action<List<int>> change) => _afterRequest[requestNumber] = change;
+
+		public void AfterEveryRequest(Action<List<int>> change) => _afterEveryRequest = change;
+
+		public string Respond(HttpRequestMessage request)
+		{
+			var query = CapturingHandler.ParseQuery(request.RequestUri!);
+			var pageNo = int.Parse(query["page_no"]!);
+			var pageSize = int.Parse(query["page_size"]!);
+			var page = _ids.Skip((pageNo - 1) * pageSize).Take(pageSize).ToList();
+			var json = SitesJsonFor(page, page.Count == 0 ? 0 : _ids.Count);
+
+			_requests++;
+			if (_afterRequest.TryGetValue(_requests, out var change))
+			{
+				change(_ids);
+			}
+
+			_afterEveryRequest?.Invoke(_ids);
+			return json;
+		}
 	}
 
 	/// <summary>
@@ -342,5 +398,11 @@ public class SitesApiWrapperTests
 	{
 		var sites = Enumerable.Range(firstId, count).Select(id => $$"""{"id":{{id}},"name":"Site {{id}}","client_id":21.0}""");
 		return $$"""{"sites":[{{string.Join(',', sites)}}],"record_count":{{recordCount ?? count}}}""";
+	}
+
+	private static string SitesJsonFor(IEnumerable<int> ids, int recordCount)
+	{
+		var sites = ids.Select(id => $$"""{"id":{{id}},"name":"Site {{id}}","client_id":21.0}""");
+		return $$"""{"sites":[{{string.Join(',', sites)}}],"record_count":{{recordCount}}}""";
 	}
 }
