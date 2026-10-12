@@ -12,7 +12,7 @@ public class SitesApiWrapper(ISitesApi sitesApi) : ISitesApi
 	/// <summary>
 	/// The page size used by <see cref="GetAllPagedAsync"/> when the filter does not set one
 	/// </summary>
-	public const int DefaultPageSize = 100;
+	public static int DefaultPageSize { get; } = 100;
 
 	/// <summary>
 	/// The most pages <see cref="GetAllPagedAsync"/> will request in one pass before giving up
@@ -23,13 +23,13 @@ public class SitesApiWrapper(ISitesApi sitesApi) : ISitesApi
 	/// data. It is a backstop: a page made up entirely of sites already received is caught immediately, without
 	/// waiting for this limit.
 	/// </remarks>
-	public const int MaxPages = 1000;
+	public static int MaxPages { get; } = 1000;
 
 	/// <summary>
 	/// How many times <see cref="GetAllPagedAsync"/> starts the listing again because Halo's reported total changed
 	/// part-way through, before giving up
 	/// </summary>
-	public const int MaxAttempts = 3;
+	public static int MaxAttempts { get; } = 3;
 
 	/// <summary>
 	/// Gets all sites as a convenient list
@@ -115,34 +115,16 @@ public class SitesApiWrapper(ISitesApi sitesApi) : ISitesApi
 
 		for (var pageNo = 1; pageNo <= MaxPages; pageNo++)
 		{
-			var pageFilter = (filter ?? new SiteFilter()) with
-			{
-				Count = null,
-				Paginate = true,
-				PageSize = pageSize,
-				PageNo = pageNo
-			};
+			var response = await sitesApi.GetAllResponseAsync(PageFilter(filter, pageSize, pageNo), cancellationToken);
 
-			var response = await sitesApi.GetAllResponseAsync(pageFilter, cancellationToken);
-
-			if (response.RecordCount > 0)
+			if (TotalHasMoved(response.RecordCount, ref firstTotal))
 			{
-				firstTotal ??= response.RecordCount;
-				if (response.RecordCount != firstTotal)
-				{
-					return (sites, true);
-				}
+				return (sites, true);
 			}
 
 			if (response.Sites.Count == 0)
 			{
-				if (firstTotal is { } total && sites.Count != total)
-				{
-					throw new InvalidOperationException(
-						$"Halo reported {total} sites but {sites.Count} were returned before the empty page {pageNo}; the pages "
-						+ "did not line up, so the list would be incomplete.");
-				}
-
+				EnsureTotalReached(firstTotal, sites.Count, pageNo);
 				return (sites, false);
 			}
 
@@ -158,6 +140,40 @@ public class SitesApiWrapper(ISitesApi sitesApi) : ISitesApi
 
 		throw new InvalidOperationException(
 			$"Halo still had sites to return after {MaxPages} pages of up to {pageSize}; stopping at the page limit.");
+	}
+
+	private static SiteFilter PageFilter(SiteFilter? filter, int pageSize, int pageNo)
+		=> (filter ?? new SiteFilter()) with
+		{
+			Count = null,
+			Paginate = true,
+			PageSize = pageSize,
+			PageNo = pageNo
+		};
+
+	/// <summary>
+	/// Records the first non-zero total and reports whether this page's total differs from it. A zero total is
+	/// Halo's answer past the end of the list and says nothing either way.
+	/// </summary>
+	private static bool TotalHasMoved(int recordCount, ref int? firstTotal)
+	{
+		if (recordCount <= 0)
+		{
+			return false;
+		}
+
+		firstTotal ??= recordCount;
+		return recordCount != firstTotal;
+	}
+
+	private static void EnsureTotalReached(int? total, int collected, int emptyPageNo)
+	{
+		if (total is { } expected && collected != expected)
+		{
+			throw new InvalidOperationException(
+				$"Halo reported {expected} sites but {collected} were returned before the empty page {emptyPageNo}; the pages "
+				+ "did not line up, so the list would be incomplete.");
+		}
 	}
 
 	/// <inheritdoc />
