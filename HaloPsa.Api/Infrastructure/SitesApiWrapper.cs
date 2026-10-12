@@ -34,7 +34,7 @@ public class SitesApiWrapper(ISitesApi sitesApi) : ISitesApi
 	/// <param name="cancellationToken">Cancellation token</param>
 	/// <returns>List of sites</returns>
 	public Task<IReadOnlyList<Site>> GetAllAsync(CancellationToken cancellationToken)
-		=> GetAllPagedAsync(filter: null, cancellationToken);
+		=> GetAllPagedAsync(new SiteFilter { IncludeInactive = false }, cancellationToken);
 
 	/// <summary>
 	/// Gets all sites for a specific client
@@ -46,24 +46,26 @@ public class SitesApiWrapper(ISitesApi sitesApi) : ISitesApi
 	/// <param name="cancellationToken">Cancellation token</param>
 	/// <returns>List of sites for the specified client</returns>
 	public Task<IReadOnlyList<Site>> GetAllAsync(int clientId, CancellationToken cancellationToken)
-		=> GetAllPagedAsync(new SiteFilter { ClientId = clientId }, cancellationToken);
+		=> GetAllPagedAsync(new SiteFilter { ClientId = clientId, IncludeInactive = false }, cancellationToken);
 
 	/// <summary>
 	/// Gets every site matching the filter by requesting pages until the reported total has been collected
 	/// </summary>
 	/// <remarks>
 	/// <para>Pagination is always switched on, whatever <see cref="SiteFilter.Paginate"/> and
-	/// <see cref="SiteFilter.PageNo"/> say. <see cref="SiteFilter.PageSize"/> is used when set and
+	/// <see cref="SiteFilter.PageNo"/> say, and <see cref="SiteFilter.Count"/> is not sent, because paging decides
+	/// how many rows come back. <see cref="SiteFilter.PageSize"/> is used when set and
 	/// <see cref="DefaultPageSize"/> otherwise.</para>
 	/// <para>With <c>pageinate=true</c> Halo reports the TOTAL number of matching sites in
 	/// <see cref="SitesResponse.RecordCount"/> on every page (checked against a live tenant: 62 sites gave
-	/// <c>record_count: 62</c> on each page, however the page size was set). Pages are requested until that many
-	/// sites have been collected, or a page comes back empty. This does not depend on Halo honouring the page
-	/// size, which matters because it may return fewer rows per page than were asked for.</para>
-	/// <para>When Halo does not report a total (<see cref="SitesResponse.RecordCount"/> of zero or less) the last
-	/// page is taken to be the first one holding fewer rows than the page size, so in that case a page size larger
-	/// than Halo allows would end the listing early - keep it at or below 100. The highest total any page reports
-	/// is kept, so one page reporting zero does not switch to that rule part-way through.</para>
+	/// <c>record_count: 62</c> on each page, however the page size was set). Pages are requested until the most
+	/// recently reported total has been collected. The most recent non-zero total is used rather than the first,
+	/// so a site added or removed while the listing is in progress moves the target with it, and a page reporting
+	/// zero does not discard it. This does not depend on Halo honouring the page size, which matters because it
+	/// may return fewer rows per page than were asked for.</para>
+	/// <para>When Halo reports no total at all, pages are requested until one comes back empty. That costs one
+	/// request more than stopping at the first short page, but a short page cannot be told apart from Halo capping
+	/// the page size, and stopping there is exactly how a list silently ends at 50.</para>
 	/// <para>A site that appears on two pages - one created or reordered while the listing is in progress - is
 	/// returned once. A page made up entirely of sites already received means Halo is ignoring <c>page_no</c>,
 	/// and throws.</para>
@@ -86,13 +88,17 @@ public class SitesApiWrapper(ISitesApi sitesApi) : ISitesApi
 		{
 			var pageFilter = (filter ?? new SiteFilter()) with
 			{
+				Count = null,
 				Paginate = true,
 				PageSize = pageSize,
 				PageNo = pageNo
 			};
 
 			var response = await sitesApi.GetAllResponseAsync(pageFilter, cancellationToken);
-			reportedTotal = Math.Max(reportedTotal, response.RecordCount);
+			if (response.RecordCount > 0)
+			{
+				reportedTotal = response.RecordCount;
+			}
 
 			if (response.Sites.Count == 0)
 			{
@@ -118,11 +124,8 @@ public class SitesApiWrapper(ISitesApi sitesApi) : ISitesApi
 
 			sites.AddRange(newSites);
 
-			var finished = reportedTotal > 0
-				? sites.Count >= reportedTotal
-				: response.Sites.Count < pageSize;
-
-			if (finished)
+			// With no total reported, only an empty page ends the listing - see the remarks.
+			if (reportedTotal > 0 && sites.Count >= reportedTotal)
 			{
 				return sites;
 			}

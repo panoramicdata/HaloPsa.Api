@@ -193,10 +193,10 @@ public class SitesApiWrapperTests
 	}
 
 	[Fact]
-	public async Task GetAllPagedAsync_WhenALaterPageReportsNoTotal_KeepsTheHighestTotalSeen()
+	public async Task GetAllPagedAsync_WhenALaterPageReportsNoTotal_KeepsTheLastTotalReported()
 	{
-		// Pages are capped at 50 while 100 are requested. If page 2's zero total switched the loop to the
-		// short-page rule, it would stop at 100 of 120.
+		// Pages are capped at 50 while 100 are requested. If page 2's zero total were taken as "no total", the
+		// listing would lose its target part-way through.
 		var handler = new CapturingHandler(request =>
 		{
 			var pageNo = int.Parse(CapturingHandler.ParseQuery(request.RequestUri!)["page_no"]!);
@@ -233,19 +233,66 @@ public class SitesApiWrapperTests
 	}
 
 	[Fact]
-	public async Task GetAllPagedAsync_WhenHaloReportsNoTotal_FallsBackToStoppingOnTheFirstShortPage()
+	public async Task GetAllPagedAsync_WhenHaloReportsNoTotal_PagesUntilAnEmptyPage()
 	{
 		var handler = new CapturingHandler(request =>
 		{
 			var pageNo = int.Parse(CapturingHandler.ParseQuery(request.RequestUri!)["page_no"]!);
-			return SitesJson(pageNo switch { 1 => 100, 2 => 100, _ => 37 }, firstId: ((pageNo - 1) * 100) + 1, recordCount: 0);
+			return SitesJson(pageNo switch { 1 => 100, 2 => 100, 3 => 37, _ => 0 }, firstId: ((pageNo - 1) * 100) + 1, recordCount: 0);
 		});
 		var wrapper = new SitesApiWrapper(CreateClient<ISitesApi>(handler));
 
 		var sites = await wrapper.GetAllPagedAsync(filter: null, CancellationToken.None);
 
 		_ = sites.Should().HaveCount(237);
-		_ = handler.Requests.Should().HaveCount(3);
+		_ = handler.Requests.Should().HaveCount(4);
+	}
+
+	[Fact]
+	public async Task GetAllPagedAsync_WhenHaloReportsNoTotalAndCapsPagesAt50_StillCollectsEverySite()
+	{
+		// The case a short-page stop gets wrong: every page is 50, which looks "short" against the 100 asked for.
+		var handler = new CapturingHandler(request =>
+		{
+			var pageNo = int.Parse(CapturingHandler.ParseQuery(request.RequestUri!)["page_no"]!);
+			var skipped = (pageNo - 1) * 50;
+			return SitesJson(Math.Clamp(120 - skipped, 0, 50), firstId: skipped + 1, recordCount: 0);
+		});
+		var wrapper = new SitesApiWrapper(CreateClient<ISitesApi>(handler));
+
+		var sites = await wrapper.GetAllPagedAsync(filter: null, CancellationToken.None);
+
+		_ = sites.Should().HaveCount(120);
+	}
+
+	[Fact]
+	public async Task GetAllPagedAsync_WhenASiteIsDeletedMidListing_FinishesAtTheNewTotal()
+	{
+		// 150 sites; one is deleted after page 1, so page 2 holds the remaining 49 and reports 149.
+		var handler = new CapturingHandler(request =>
+		{
+			var pageNo = int.Parse(CapturingHandler.ParseQuery(request.RequestUri!)["page_no"]!);
+			return pageNo == 1
+				? SitesJson(100, firstId: 1, recordCount: 150)
+				: SitesJson(49, firstId: 102, recordCount: 149);
+		});
+		var wrapper = new SitesApiWrapper(CreateClient<ISitesApi>(handler));
+
+		var sites = await wrapper.GetAllPagedAsync(filter: null, CancellationToken.None);
+
+		_ = sites.Should().HaveCount(149);
+		_ = handler.Requests.Should().HaveCount(2);
+	}
+
+	[Fact]
+	public async Task GetAllPagedAsync_DoesNotSendTheCallersCount()
+	{
+		var handler = new CapturingHandler(SimulatedHalo(totalSites: 3));
+		var wrapper = new SitesApiWrapper(CreateClient<ISitesApi>(handler));
+
+		_ = await wrapper.GetAllPagedAsync(new SiteFilter { Count = 500 }, CancellationToken.None);
+
+		_ = CapturingHandler.ParseQuery(handler.LastRequest)["count"].Should().BeNull();
 	}
 
 	[Fact]
@@ -258,8 +305,8 @@ public class SitesApiWrapperTests
 
 		_ = sites.Should().HaveCount(105);
 		_ = handler.Requests.Select(r => r.Query).Should().Equal(
-			"?pageinate=True&page_no=1&page_size=100&client_id=5",
-			"?pageinate=True&page_no=2&page_size=100&client_id=5");
+			"?pageinate=True&page_no=1&page_size=100&client_id=5&includeinactive=False",
+			"?pageinate=True&page_no=2&page_size=100&client_id=5&includeinactive=False");
 	}
 
 	[Fact]
@@ -271,7 +318,7 @@ public class SitesApiWrapperTests
 		var sites = await wrapper.GetAllAsync(CancellationToken.None);
 
 		_ = sites.Should().HaveCount(3);
-		_ = handler.LastRequest.Query.Should().Be("?pageinate=True&page_no=1&page_size=100");
+		_ = handler.LastRequest.Query.Should().Be("?pageinate=True&page_no=1&page_size=100&includeinactive=False");
 	}
 
 	/// <summary>
