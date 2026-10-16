@@ -332,7 +332,6 @@ public class HaloNotFoundException : HaloApiException
 		ResourceType = resourceType;
 		ResourceId = resourceId;
 	}
-
 }
 
 /// <summary>
@@ -503,7 +502,6 @@ public class HaloRateLimitException : HaloApiException
 		RemainingRequests = remainingRequests;
 		ResetTime = resetTime;
 	}
-
 }
 
 /// <summary>

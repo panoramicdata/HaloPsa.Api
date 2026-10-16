@@ -135,43 +135,36 @@ public record UpdateClientRequest
 }
 
 /// <summary>
-/// Response for client creation operations
+/// Base response for client operations
 /// </summary>
-public record CreateClientResponse
+public record ClientOperationResponse
 {
 	/// <summary>
-	/// The newly created client
+	/// The client
 	/// </summary>
 	public required Client Client { get; init; }
 
 	/// <summary>
-	/// Whether the creation was successful
+	/// Whether the operation was successful
 	/// </summary>
 	public bool Success { get; init; } = true;
 
 	/// <summary>
-	/// Any messages or warnings from the creation
+	/// Any messages or warnings from the operation
 	/// </summary>
 	public IReadOnlyList<string>? Messages { get; init; }
 }
 
 /// <summary>
+/// Response for client creation operations
+/// </summary>
+public record CreateClientResponse : ClientOperationResponse
+{
+}
+
+/// <summary>
 /// Response for client update operations
 /// </summary>
-public record UpdateClientResponse
+public record UpdateClientResponse : ClientOperationResponse
 {
-	/// <summary>
-	/// The updated client
-	/// </summary>
-	public required Client Client { get; init; }
-
-	/// <summary>
-	/// Whether the update was successful
-	/// </summary>
-	public bool Success { get; init; } = true;
-
-	/// <summary>
-	/// Any messages or warnings from the update
-	/// </summary>
-	public IReadOnlyList<string>? Messages { get; init; }
 }

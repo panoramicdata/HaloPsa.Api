@@ -14,12 +14,7 @@ public class HaloClientInfrastructureTests(IntegrationTestFixture fixture)
 	public void HaloClient_WithValidOptions_CanBeInstantiated()
 	{
 		// Arrange
-		var options = new HaloClientOptions
-		{
-			Account = Account,
-			ClientId = ClientId,
-			ClientSecret = ClientSecret
-		};
+		var options = BaseOptions(Account, ClientId, ClientSecret);
 
 		// Act
 		using var client = new HaloClient(options);
@@ -91,10 +86,17 @@ public class HaloClientInfrastructureTests(IntegrationTestFixture fixture)
 		=> _fixture.Configuration[key] ?? throw new InvalidOperationException($"{key} not found");
 
 	/// <summary>
-	/// Builds options that pass validation, with one field overridden to whatever the caller wants
-	/// to prove invalid. The defaults mirror <see cref="HaloClientOptions"/>'s own, so only the
-	/// overridden field is under test.
+	/// Builds the credential-backed options both instantiation tests share; the caller keeps its
+	/// own extended fields where needed.
 	/// </summary>
+	private static HaloClientOptions BaseOptions(string account, string clientId, string clientSecret)
+		=> new()
+		{
+			Account = account,
+			ClientId = clientId,
+			ClientSecret = clientSecret
+		};
+
 	private static HaloClientOptions OptionsWith(
 		string account = "test-account",
 		string? clientId = null,
@@ -106,6 +108,8 @@ public class HaloClientInfrastructureTests(IntegrationTestFixture fixture)
 			ClientSecret = $"{Guid.NewGuid()}-{Guid.NewGuid()}",
 			RequestTimeout = requestTimeout ?? TimeSpan.FromSeconds(30)
 		};
+
+
 
 	/// <summary>
 	/// Asserts that validating <paramref name="options"/> fails in the expected way.

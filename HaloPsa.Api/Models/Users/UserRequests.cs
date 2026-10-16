@@ -3,51 +3,63 @@ using System.Text.Json.Serialization;
 namespace HaloPsa.Api.Models.Users;
 
 /// <summary>
+/// Base class for user request models, holding the optional user fields shared by create and update
+/// </summary>
+public abstract record UserRequest
+{
+	/// <summary>
+	/// The user's email address
+	/// </summary>
+	[JsonPropertyName("emailaddress")]
+	public virtual string? EmailAddress { get; init; }
+
+	/// <summary>
+	/// The user's username/login
+	/// </summary>
+	[JsonPropertyName("username")]
+	public virtual string? Username { get; init; }
+
+	/// <summary>
+	/// The user's site/location
+	/// </summary>
+	[JsonPropertyName("site")]
+	public virtual string? Site { get; init; }
+
+	/// <summary>
+	/// The user's department
+	/// </summary>
+	[JsonPropertyName("department")]
+	public virtual string? Department { get; init; }
+
+	/// <summary>
+	/// The user's telephone number
+	/// </summary>
+	[JsonPropertyName("telephone")]
+	public virtual string? Telephone { get; init; }
+
+	/// <summary>
+	/// The user's mobile number
+	/// </summary>
+	[JsonPropertyName("mobile")]
+	public virtual string? Mobile { get; init; }
+
+	/// <summary>
+	/// The client ID this user belongs to
+	/// </summary>
+	[JsonPropertyName("client_id")]
+	public virtual int? ClientId { get; init; }
+}
+
+/// <summary>
 /// Request model for creating a new user
 /// </summary>
-public record CreateUserRequest
+public record CreateUserRequest : UserRequest
 {
 	/// <summary>
 	/// The user's name (required)
 	/// </summary>
 	[JsonPropertyName("name")]
 	public required string Name { get; init; }
-
-	/// <summary>
-	/// The user's email address
-	/// </summary>
-	[JsonPropertyName("emailaddress")]
-	public string? EmailAddress { get; init; }
-
-	/// <summary>
-	/// The user's username/login
-	/// </summary>
-	[JsonPropertyName("username")]
-	public string? Username { get; init; }
-
-	/// <summary>
-	/// The user's site/location
-	/// </summary>
-	[JsonPropertyName("site")]
-	public string? Site { get; init; }
-
-	/// <summary>
-	/// The user's department
-	/// </summary>
-	[JsonPropertyName("department")]
-	public string? Department { get; init; }
-
-	/// <summary>
-	/// The user's telephone number
-	/// </summary>
-	[JsonPropertyName("telephone")]
-	public string? Telephone { get; init; }
-
-	/// <summary>
-	/// The user's mobile number
-	/// </summary>
-	[JsonPropertyName("mobile")]
-	public string? Mobile { get; init; }
 
 	/// <summary>
 	/// Whether this user is an agent
@@ -62,12 +74,6 @@ public record CreateUserRequest
 	public bool IsImportantUser { get; init; }
 
 	/// <summary>
-	/// The client ID this user belongs to
-	/// </summary>
-	[JsonPropertyName("client_id")]
-	public int? ClientId { get; init; }
-
-	/// <summary>
 	/// Whether the user is inactive
 	/// </summary>
 	[JsonPropertyName("inactive")]
@@ -77,49 +83,13 @@ public record CreateUserRequest
 /// <summary>
 /// Request model for updating an existing user
 /// </summary>
-public record UpdateUserRequest
+public record UpdateUserRequest : UserRequest
 {
 	/// <summary>
 	/// The user's name
 	/// </summary>
 	[JsonPropertyName("name")]
 	public string? Name { get; init; }
-
-	/// <summary>
-	/// The user's email address
-	/// </summary>
-	[JsonPropertyName("emailaddress")]
-	public string? EmailAddress { get; init; }
-
-	/// <summary>
-	/// The user's username/login
-	/// </summary>
-	[JsonPropertyName("username")]
-	public string? Username { get; init; }
-
-	/// <summary>
-	/// The user's site/location
-	/// </summary>
-	[JsonPropertyName("site")]
-	public string? Site { get; init; }
-
-	/// <summary>
-	/// The user's department
-	/// </summary>
-	[JsonPropertyName("department")]
-	public string? Department { get; init; }
-
-	/// <summary>
-	/// The user's telephone number
-	/// </summary>
-	[JsonPropertyName("telephone")]
-	public string? Telephone { get; init; }
-
-	/// <summary>
-	/// The user's mobile number
-	/// </summary>
-	[JsonPropertyName("mobile")]
-	public string? Mobile { get; init; }
 
 	/// <summary>
 	/// Whether this user is an agent
@@ -132,12 +102,6 @@ public record UpdateUserRequest
 	/// </summary>
 	[JsonPropertyName("isimportantuser")]
 	public bool? IsImportantUser { get; init; }
-
-	/// <summary>
-	/// The client ID this user belongs to
-	/// </summary>
-	[JsonPropertyName("client_id")]
-	public int? ClientId { get; init; }
 
 	/// <summary>
 	/// Whether the user is inactive

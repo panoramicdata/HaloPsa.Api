@@ -153,22 +153,22 @@ public record UpdateProjectRequest
 }
 
 /// <summary>
-/// Response for project creation operations
+/// Response for project creation or update operations
 /// </summary>
 public record CreateProjectResponse
 {
 	/// <summary>
-	/// The newly created project
+	/// The created or updated project
 	/// </summary>
 	public required Project Project { get; init; }
 
 	/// <summary>
-	/// Whether the creation was successful
+	/// Whether the operation was successful
 	/// </summary>
 	public bool Success { get; init; } = true;
 
 	/// <summary>
-	/// Any messages or warnings from the creation
+	/// Any messages or warnings from the operation
 	/// </summary>
 	public IReadOnlyList<string>? Messages { get; init; }
 }
@@ -176,20 +176,4 @@ public record CreateProjectResponse
 /// <summary>
 /// Response for project update operations
 /// </summary>
-public record UpdateProjectResponse
-{
-	/// <summary>
-	/// The updated project
-	/// </summary>
-	public required Project Project { get; init; }
-
-	/// <summary>
-	/// Whether the update was successful
-	/// </summary>
-	public bool Success { get; init; } = true;
-
-	/// <summary>
-	/// Any messages or warnings from the update
-	/// </summary>
-	public IReadOnlyList<string>? Messages { get; init; }
-}
+public record UpdateProjectResponse : CreateProjectResponse;

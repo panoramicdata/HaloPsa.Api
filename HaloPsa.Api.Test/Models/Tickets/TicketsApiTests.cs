@@ -45,33 +45,10 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 		var allTickets = await HaloClient.Psa.Tickets.GetAllAsync(CancellationToken.None);
 
 		// If no tickets exist, create a test ticket first
-		if (allTickets.Tickets.Count == 0)
+		allTickets = await EnsureTestTicketsExistForClientFilterAsync(allTickets, clients[0].Id);
+		if (allTickets is null)
 		{
-			var createRequest = await BuildCreateTicketRequestAsync(
-				"Test Ticket for Client Filter",
-				"Test ticket created for client filtering test",
-				CancellationToken.None);
-			_ = createRequest.Should().NotBeNull("Need at least one user to create test ticket");
-
-			try
-			{
-				var created = await HaloClient.Psa.Tickets.CreateAsync(createRequest!, CancellationToken.None);
-				_ = created.Should().NotBeNull();
-				_ = created.Ticket.Should().NotBeNull();
-
-				// Now get the updated ticket list
-				allTickets = await HaloClient.Psa.Tickets.GetAllAsync(CancellationToken.None);
-			}
-			catch (HaloApiException)
-			{
-				// If we can't create tickets, skip this test
-				return;
-			}
-		}
-
-		// If we still have no tickets, skip the test
-		if (allTickets.Tickets.Count == 0)
-		{
+			// Still no tickets, skip this test
 			return;
 		}
 
@@ -390,6 +367,45 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 	}
 
 	/// <summary>
+	/// Ensures tickets exist for the client filter test, creating a test ticket when none do, and
+	/// returns the ticket list the test should continue from (or <see langword="null"/> when there
+	/// are still no tickets and the test should skip).
+	/// </summary>
+	private async Task<TicketsResponse?> EnsureTestTicketsExistForClientFilterAsync(
+		TicketsResponse allTickets,
+		int firstClientId)
+	{
+		if (allTickets.Tickets.Count > 0)
+		{
+			return allTickets;
+		}
+
+		var createRequest = await BuildCreateTicketRequestAsync(
+			"Test Ticket for Client Filter",
+			"Test ticket created for client filtering test",
+			CancellationToken.None);
+		_ = createRequest.Should().NotBeNull("Need at least one user to create test ticket");
+
+		try
+		{
+			var created = await HaloClient.Psa.Tickets.CreateAsync(createRequest!, CancellationToken.None);
+			_ = created.Should().NotBeNull();
+			_ = created.Ticket.Should().NotBeNull();
+
+			// Now get the updated ticket list
+			allTickets = await HaloClient.Psa.Tickets.GetAllAsync(CancellationToken.None);
+		}
+		catch (HaloApiException)
+		{
+			// If we can't create tickets, skip this test
+			return null;
+		}
+
+		// If we still have no tickets, skip the test
+		return allTickets.Tickets.Count == 0 ? null : allTickets;
+	}
+
+	/// <summary>
 	/// The status codes Halo returns when an endpoint is unavailable or refuses the operation.
 	/// Several of these tests accept either a successful call or one of these, because sandboxes
 	/// differ in which ticket operations they permit.
@@ -465,9 +481,24 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 		}
 
 		// No tickets exist, try to create one
-		var createRequest = await BuildCreateTicketRequestAsync(
+		return await CreateTestTicketAsync(
 			"Test Ticket",
 			"Test ticket created for integration testing",
+			cancellationToken);
+	}
+
+	/// <summary>
+	/// Creates a test ticket with the given summary and details, surfacing a skip signal when the
+	/// sandbox will not let us create tickets at all.
+	/// </summary>
+	private async Task<Ticket> CreateTestTicketAsync(
+		string summary,
+		string details,
+		CancellationToken cancellationToken)
+	{
+		var createRequest = await BuildCreateTicketRequestAsync(
+			summary,
+			details,
 			cancellationToken);
 		_ = createRequest.Should().NotBeNull("Need at least one client and one user to create a test ticket");
 
