@@ -73,7 +73,12 @@ public class HaloClientOptions
 	public TimeSpan MaxRetryDelay { get; init; } = TimeSpan.FromSeconds(30);
 
 	/// <summary>
-	/// Gets or sets whether this client is restricted to reads.
+	/// Gets or sets whether the client refuses every request that could change the server, before it is sent. Default is false
+	/// </summary>
+	public bool IsReadOnly { get; set; }
+
+	/// <summary>
+	/// Gets or sets whether this client is restricted to reads. Superseded by <see cref="IsReadOnly"/>.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -94,7 +99,12 @@ public class HaloClientOptions
 	/// Suite connection.
 	/// </para>
 	/// </remarks>
-	public bool? ReadOnly { get; init; }
+	[Obsolete("Use IsReadOnly")]
+	public bool? ReadOnly
+	{
+		get => IsReadOnly ? true : null;
+		init => IsReadOnly = value == true;
+	}
 
 	/// <summary>
 	/// Gets the full base URL of the Halo instance, overriding the default

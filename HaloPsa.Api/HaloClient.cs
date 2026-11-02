@@ -27,7 +27,7 @@ public class HaloClient : IHaloClient, IDisposable
 		_httpClient = CreateHttpClient();
 
 		// Initialize API modules lazily
-		Psa = new Lazy<IPsaApi>(() => new PsaApi(_httpClient, _options.ReadOnly)).Value;
+		Psa = new Lazy<IPsaApi>(() => new PsaApi(_httpClient, _options.IsReadOnly)).Value;
 		ServiceDesk = new Lazy<IServiceDeskApi>(() => new ServiceDeskApi(_httpClient)).Value;
 		System = new Lazy<ISystemApi>(() => new SystemApi(_httpClient)).Value;
 	}
@@ -100,7 +100,12 @@ public class HaloClient : IHaloClient, IDisposable
 			InnerHandler = chain
 		};
 
-		var httpClient = new HttpClient(errorHandler)
+		var readOnlyHandler = new ReadOnlyHandler(_options)
+		{
+			InnerHandler = errorHandler
+		};
+
+		var httpClient = new HttpClient(readOnlyHandler)
 		{
 			BaseAddress = new Uri(_options.EffectiveBaseUrl),
 			Timeout = _options.RequestTimeout
