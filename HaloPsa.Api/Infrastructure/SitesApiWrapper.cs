@@ -91,55 +91,15 @@ public class SitesApiWrapper(ISitesApi sitesApi) : ISitesApi
 	{
 		var pageSize = filter?.PageSize is > 0 ? filter.PageSize.Value : DefaultPageSize;
 
-		for (var attempt = 1; attempt <= MaxAttempts; attempt++)
-		{
-			var (sites, totalMoved) = await ReadEveryPageAsync(filter, pageSize, cancellationToken);
-			if (!totalMoved)
+		return await PagedReader.ReadAllAsync<Site>(
+			async (pageNo, token) =>
 			{
-				return sites;
-			}
-		}
-
-		throw new InvalidOperationException(
-			$"The site list kept changing while it was being read ({MaxAttempts} attempts); stopping rather than return a list that may be incomplete.");
-	}
-
-	private async Task<(IReadOnlyList<Site> Sites, bool TotalMoved)> ReadEveryPageAsync(
-		SiteFilter? filter,
-		int pageSize,
-		CancellationToken cancellationToken)
-	{
-		var sites = new List<Site>();
-		var seenIds = new HashSet<int>();
-		int? firstTotal = null;
-
-		for (var pageNo = 1; pageNo <= MaxPages; pageNo++)
-		{
-			var response = await sitesApi.GetAllResponseAsync(PageFilter(filter, pageSize, pageNo), cancellationToken);
-
-			if (TotalHasMoved(response.RecordCount, ref firstTotal))
-			{
-				return (sites, true);
-			}
-
-			if (response.Sites.Count == 0)
-			{
-				EnsureTotalReached(firstTotal, sites.Count, pageNo);
-				return (sites, false);
-			}
-
-			var newSites = response.Sites.Where(site => seenIds.Add(site.Id)).ToList();
-			if (newSites.Count == 0)
-			{
-				throw new InvalidOperationException(
-					$"Halo returned page {pageNo} holding only sites already received; it does not appear to be honouring page_no.");
-			}
-
-			sites.AddRange(newSites);
-		}
-
-		throw new InvalidOperationException(
-			$"Halo still had sites to return after {MaxPages} pages of up to {pageSize}; stopping at the page limit.");
+				var response = await sitesApi.GetAllResponseAsync(PageFilter(filter, pageSize, pageNo), token).ConfigureAwait(false);
+				return (response.Sites, response.RecordCount);
+			},
+			site => site.Id,
+			new PagedReadOptions(pageSize, MaxPages, MaxAttempts, "site", "sites"),
+			cancellationToken).ConfigureAwait(false);
 	}
 
 	private static SiteFilter PageFilter(SiteFilter? filter, int pageSize, int pageNo)
@@ -150,31 +110,6 @@ public class SitesApiWrapper(ISitesApi sitesApi) : ISitesApi
 			PageSize = pageSize,
 			PageNo = pageNo
 		};
-
-	/// <summary>
-	/// Records the first non-zero total and reports whether this page's total differs from it. A zero total is
-	/// Halo's answer past the end of the list and says nothing either way.
-	/// </summary>
-	private static bool TotalHasMoved(int recordCount, ref int? firstTotal)
-	{
-		if (recordCount <= 0)
-		{
-			return false;
-		}
-
-		firstTotal ??= recordCount;
-		return recordCount != firstTotal;
-	}
-
-	private static void EnsureTotalReached(int? total, int collected, int emptyPageNo)
-	{
-		if (total is { } expected && collected != expected)
-		{
-			throw new InvalidOperationException(
-				$"Halo reported {expected} sites but {collected} were returned before the empty page {emptyPageNo}; the pages "
-				+ "did not line up, so the list would be incomplete.");
-		}
-	}
 
 	/// <inheritdoc />
 	public Task<SitesResponse> GetAllResponseAsync(int? clientId, bool includeInactive, CancellationToken cancellationToken)

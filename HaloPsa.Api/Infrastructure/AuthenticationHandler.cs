@@ -22,16 +22,22 @@ internal sealed class AuthenticationHandler : DelegatingHandler
 	private DateTime _tokenExpiry = DateTime.MinValue;
 
 	public AuthenticationHandler(HaloClientOptions options)
+		: this(options, new HttpClientHandler())
+	{
+	}
+
+	internal AuthenticationHandler(HaloClientOptions options, HttpMessageHandler tokenHandler)
 	{
 		_options = options ?? throw new ArgumentNullException(nameof(options));
 
 		// Create a separate HttpClient for authentication requests
 		// This avoids circular dependencies with the main client
-		_authHttpClient = new HttpClient
+		_authHttpClient = new HttpClient(tokenHandler)
 		{
 			BaseAddress = new Uri(_options.EffectiveBaseUrl),
 			Timeout = _options.RequestTimeout
 		};
+		_authHttpClient.DefaultRequestHeaders.Add("User-Agent", _options.EffectiveUserAgent);
 	}
 
 	protected override async Task<HttpResponseMessage> SendAsync(

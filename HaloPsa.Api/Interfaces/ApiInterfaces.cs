@@ -24,6 +24,16 @@ public interface IUsersApi
     Task<UsersResponse> GetResponseAsync(CancellationToken cancellationToken);
 
     /// <summary>
+    /// Get one page of users matching a filter - Convenience method that returns unwrapped array; set <see cref="UserFilter.Paginate"/> and <see cref="UserFilter.PageNo"/> to read further pages
+    /// </summary>
+    Task<IReadOnlyList<User>> GetAllAsync(UserFilter? filter, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Get users matching a filter - Returns wrapped response with metadata
+    /// </summary>
+    Task<UsersResponse> GetResponseAsync(UserFilter? filter, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Get a user by ID
     /// </summary>
     Task<User> GetByIdAsync(int id, CancellationToken cancellationToken);
@@ -46,6 +56,21 @@ public interface IClientsApi
     /// Get all clients - Returns wrapped response with metadata
     /// </summary>
     Task<ClientsResponse> GetResponseAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Get clients matching a filter - Returns wrapped response with metadata
+    /// </summary>
+    Task<ClientsResponse> GetResponseAsync(ClientFilter? filter, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Get every client matching a filter, paging to the end
+    /// </summary>
+    Task<IReadOnlyList<Client>> GetAllPagedAsync(ClientFilter? filter, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Get a client by ID, optionally with its details
+    /// </summary>
+    Task<Client> GetByIdAsync(int id, bool includeDetails, CancellationToken cancellationToken);
 }
 
 /// <summary>Interface for ticket type management operations</summary> 
@@ -108,6 +133,10 @@ public interface IUsersRefitApi
     [Get("/api/Users")]
     Task<UsersResponse> GetResponseAsync(CancellationToken cancellationToken);
 
+    /// <summary>Gets users matching a filter with response wrapper</summary>
+    [Get("/api/Users")]
+    Task<UsersResponse> GetResponseAsync([Query] UserFilter? filter, CancellationToken cancellationToken);
+
     /// <summary>Gets a user by ID</summary>
     [Get("/api/Users/{id}")]
     Task<User> GetByIdAsync(int id, CancellationToken cancellationToken);
@@ -123,6 +152,14 @@ public interface IClientsRefitApi
     /// <summary>Gets a client by ID</summary>
     [Get("/api/Client/{id}")]
     Task<Client> GetByIdAsync(int id, CancellationToken cancellationToken);
+
+    /// <summary>Gets clients matching a filter with response wrapper</summary>
+    [Get("/api/Client")]
+    Task<ClientsResponse> GetResponseAsync([Query] ClientFilter? filter, CancellationToken cancellationToken);
+
+    /// <summary>Gets a client by ID, optionally with its details</summary>
+    [Get("/api/Client/{id}")]
+    Task<Client> GetByIdAsync(int id, [Query][AliasAs("includedetails")] bool includeDetails, CancellationToken cancellationToken);
 }
 
 /// <summary>Internal Refit interface for TicketTypes API</summary>

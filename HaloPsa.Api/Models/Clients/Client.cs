@@ -1,3 +1,4 @@
+using HaloPsa.Api.Models.CustomFields;
 using System.Text.Json.Serialization;
 
 namespace HaloPsa.Api.Models.Clients;
@@ -42,4 +43,13 @@ public record Client
 	/// </summary>
 	[JsonPropertyName("notes")]
 	public string? Notes { get; init; }
+
+	/// <summary>
+	/// The custom field values on this client
+	/// </summary>
+	/// <remarks>
+	/// A list read returns only the custom fields asked for with <see cref="ClientFilter.IncludeCustomFields"/>; a read by id returns them when <c>includeDetails</c> is true.
+	/// </remarks>
+	[JsonPropertyName("customfields")]
+	public IReadOnlyList<CustomFieldValue>? CustomFields { get; init; }
 }

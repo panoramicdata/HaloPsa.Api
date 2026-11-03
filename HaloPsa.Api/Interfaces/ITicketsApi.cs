@@ -1,5 +1,6 @@
 using HaloPsa.Api.Models.Tickets;
 using Refit;
+using System.Text.Json;
 
 namespace HaloPsa.Api.Interfaces;
 
@@ -57,22 +58,40 @@ public interface ITicketsApi
 	/// <param name="request">The ticket creation request</param>
 	/// <param name="cancellationToken">Cancellation token</param>
 	/// <returns>The newly created ticket</returns>
+	[Obsolete("Halo's POST /api/Tickets takes an array; use the list overload, or TicketsApiWrapper.CreateAsync, which sends one ticket as an array.")]
 	[Post("/api/Tickets")]
 	Task<CreateTicketResponse> CreateAsync(
 		[Body] CreateTicketRequest request,
 		CancellationToken cancellationToken);
 
 	/// <summary>
-	/// Update an existing ticket
+	/// Create tickets, sent as the array Halo's POST /api/Tickets takes
 	/// </summary>
-	/// <param name="id">The ticket ID to update</param>
-	/// <param name="request">The ticket update request</param>
+	/// <param name="requests">The ticket creation requests</param>
 	/// <param name="cancellationToken">Cancellation token</param>
-	/// <returns>The updated ticket</returns>
-	[Put("/api/Tickets/{id}")]
+	/// <returns>The response: <see cref="CreateTicketResponse.Tickets"/> holds every ticket Halo returned, and <see cref="CreateTicketResponse.Ticket"/> (and <see cref="CreateTicketResponse.TicketId"/>) is the first</returns>
+	/// <exception cref="JsonException">
+	/// Halo answered success but the response could not be read; the ticket may have been created, so do not retry.
+	/// The message names the ticket id when one could be read.
+	/// </exception>
+	[Post("/api/Tickets")]
+	Task<CreateTicketResponse> CreateAsync(
+		[Body] IReadOnlyList<CreateTicketRequest> requests,
+		CancellationToken cancellationToken);
+
+	/// <summary>
+	/// Update tickets: Halo has no PUT for a ticket, so an update is the POST a create uses, with each ticket's id in its body
+	/// </summary>
+	/// <param name="requests">The ticket update requests, each carrying the id of the ticket to update</param>
+	/// <param name="cancellationToken">Cancellation token</param>
+	/// <returns>The response: <see cref="UpdateTicketResponse.Tickets"/> holds every ticket Halo returned, and <see cref="UpdateTicketResponse.Ticket"/> (and <see cref="UpdateTicketResponse.TicketId"/>) is the first</returns>
+	/// <exception cref="JsonException">
+	/// Halo answered success but the response could not be read; the update may have been applied, so do not retry.
+	/// The message names the ticket id when one could be read.
+	/// </exception>
+	[Post("/api/Tickets")]
 	Task<UpdateTicketResponse> UpdateAsync(
-		int id,
-		[Body] UpdateTicketRequest request,
+		[Body] IReadOnlyList<UpdateTicketRequest> requests,
 		CancellationToken cancellationToken);
 
 	/// <summary>
@@ -87,78 +106,15 @@ public interface ITicketsApi
 		CancellationToken cancellationToken);
 
 	/// <summary>
-	/// Close a ticket
+	/// Delete a ticket, recording why
 	/// </summary>
-	/// <param name="id">The ticket ID to close</param>
-	/// <param name="resolution">Resolution summary</param>
+	/// <param name="id">The ticket ID to delete</param>
+	/// <param name="reason">The reason for the deletion, sent as Halo's <c>reason</c> parameter</param>
 	/// <param name="cancellationToken">Cancellation token</param>
-	/// <returns>The closed ticket</returns>
-	[Post("/api/Tickets/{id}/close")]
-	Task<UpdateTicketResponse> CloseAsync(
+	/// <returns>A task representing the delete operation</returns>
+	[Delete("/api/Tickets/{id}")]
+	Task DeleteAsync(
 		int id,
-		[Query] string resolution,
-		CancellationToken cancellationToken);
-
-	/// <summary>
-	/// Close a ticket without resolution
-	/// </summary>
-	/// <param name="id">The ticket ID to close</param>
-	/// <param name="cancellationToken">Cancellation token</param>
-	/// <returns>The closed ticket</returns>
-	[Post("/api/Tickets/{id}/close")]
-	Task<UpdateTicketResponse> CloseAsync(
-		int id,
-		CancellationToken cancellationToken);
-
-	/// <summary>
-	/// Reopen a closed ticket
-	/// </summary>
-	/// <param name="id">The ticket ID to reopen</param>
-	/// <param name="reason">Reason for reopening</param>
-	/// <param name="cancellationToken">Cancellation token</param>
-	/// <returns>The reopened ticket</returns>
-	[Post("/api/Tickets/{id}/reopen")]
-	Task<UpdateTicketResponse> ReopenAsync(
-		int id,
-		[Query] string reason,
-		CancellationToken cancellationToken);
-
-	/// <summary>
-	/// Reopen a closed ticket without reason
-	/// </summary>
-	/// <param name="id">The ticket ID to reopen</param>
-	/// <param name="cancellationToken">Cancellation token</param>
-	/// <returns>The reopened ticket</returns>
-	[Post("/api/Tickets/{id}/reopen")]
-	Task<UpdateTicketResponse> ReopenAsync(
-		int id,
-		CancellationToken cancellationToken);
-
-	/// <summary>
-	/// Assign a ticket to an agent
-	/// </summary>
-	/// <param name="id">The ticket ID to assign</param>
-	/// <param name="agentId">The agent ID to assign to</param>
-	/// <param name="cancellationToken">Cancellation token</param>
-	/// <returns>The assigned ticket</returns>
-	[Post("/api/Tickets/{id}/assign")]
-	Task<UpdateTicketResponse> AssignAsync(
-		int id,
-		[Query] int agentId,
-		CancellationToken cancellationToken);
-
-	/// <summary>
-	/// Assign a ticket to an agent and team
-	/// </summary>
-	/// <param name="id">The ticket ID to assign</param>
-	/// <param name="agentId">The agent ID to assign to</param>
-	/// <param name="teamId">The team ID to assign to</param>
-	/// <param name="cancellationToken">Cancellation token</param>
-	/// <returns>The assigned ticket</returns>
-	[Post("/api/Tickets/{id}/assign")]
-	Task<UpdateTicketResponse> AssignAsync(
-		int id,
-		[Query] int agentId,
-		[Query] int teamId,
+		[Query][AliasAs("reason")] string reason,
 		CancellationToken cancellationToken);
 }

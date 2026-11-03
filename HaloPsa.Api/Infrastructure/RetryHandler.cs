@@ -40,7 +40,7 @@ internal sealed class RetryHandler(
 			{
 				var response = await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
-				if (!ShouldRetry(response))
+				if (!ShouldRetry(request.Method, response))
 				{
 					LogSuccessAfterRetry(request, attempt);
 					return response;
@@ -54,7 +54,7 @@ internal sealed class RetryHandler(
 				LogRetryAttempt(request, attempt, response.StatusCode);
 				response.Dispose();
 			}
-			catch (Exception ex) when (IsRetryableException(ex))
+			catch (Exception ex) when (MayRetry(request.Method, ex))
 			{
 				if (attempt == _maxRetryAttempts)
 				{
@@ -71,8 +71,8 @@ internal sealed class RetryHandler(
 		throw new InvalidOperationException("The retry loop ended unexpectedly.");
 	}
 
-	private static bool ShouldRetry(HttpResponseMessage response)
-		=> !response.IsSuccessStatusCode && IsRetryableStatusCode(response.StatusCode);
+	private static bool ShouldRetry(HttpMethod method, HttpResponseMessage response)
+		=> !response.IsSuccessStatusCode && MayRetry(method, response.StatusCode);
 
 	private void LogSuccessAfterRetry(HttpRequestMessage request, int attempt)
 	{
@@ -134,6 +134,13 @@ internal sealed class RetryHandler(
 		var exponentialDelay = TimeSpan.FromMilliseconds(_retryDelay.TotalMilliseconds * Math.Pow(2, attemptNumber));
 		return exponentialDelay > _maxRetryDelay ? _maxRetryDelay : exponentialDelay;
 	}
+
+	// A failed POST may already have been processed, so only a 429, which Halo answers unprocessed, is safe to re-send.
+	private static bool MayRetry(HttpMethod method, HttpStatusCode statusCode)
+		=> IsRetryableStatusCode(statusCode) && (method != HttpMethod.Post || statusCode == HttpStatusCode.TooManyRequests);
+
+	private static bool MayRetry(HttpMethod method, Exception ex)
+		=> IsRetryableException(ex) && method != HttpMethod.Post;
 
 	private static bool IsRetryableStatusCode(HttpStatusCode statusCode)
 		=> _retryableStatusCodes.Contains(statusCode);

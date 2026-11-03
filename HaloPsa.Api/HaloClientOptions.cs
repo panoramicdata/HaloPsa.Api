@@ -33,7 +33,7 @@ public class HaloClientOptions
 	public TimeSpan RequestTimeout { get; init; } = TimeSpan.FromSeconds(30);
 
 	/// <summary>
-	/// Gets or sets the maximum number of retry attempts for failed requests. Default is 3
+	/// Gets or sets the maximum number of retry attempts for failed requests; a POST is retried only on 429 Too Many Requests. Default is 3
 	/// </summary>
 	public int MaxRetryAttempts { get; init; } = 3;
 
@@ -61,6 +61,15 @@ public class HaloClientOptions
 	/// Gets or sets additional default headers to include with all requests
 	/// </summary>
 	public IReadOnlyDictionary<string, string> DefaultHeaders { get; init; } = new Dictionary<string, string>();
+
+	/// <summary>
+	/// The User-Agent sent with every request, the token request included. Null or blank sends Halo.Api/.NET.
+	/// </summary>
+	public string? UserAgent { get; init; }
+
+	internal const string DefaultUserAgent = "Halo.Api/.NET";
+
+	internal string EffectiveUserAgent => string.IsNullOrWhiteSpace(UserAgent) ? DefaultUserAgent : UserAgent;
 
 	/// <summary>
 	/// Gets or sets whether to use exponential back-off for retries. Default is true
@@ -142,6 +151,7 @@ public class HaloClientOptions
 	{
 		ValidateRequiredFields();
 		ValidateFormats();
+		ValidateUserAgent();
 		ValidateTimings();
 	}
 
@@ -188,6 +198,21 @@ public class HaloClientOptions
 	private static bool IsAbsoluteHttpUrl(string value)
 		=> Uri.TryCreate(value, UriKind.Absolute, out var uri)
 			&& (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp);
+
+	private void ValidateUserAgent()
+	{
+		if (string.IsNullOrWhiteSpace(UserAgent))
+		{
+			return;
+		}
+
+		using var probe = new HttpRequestMessage();
+
+		if (!probe.Headers.UserAgent.TryParseAdd(UserAgent))
+		{
+			throw new ArgumentException($"UserAgent is not a valid User-Agent header value, for example ExampleProduct/1.0. Got: {UserAgent}", nameof(UserAgent));
+		}
+	}
 
 	private void ValidateTimings()
 	{

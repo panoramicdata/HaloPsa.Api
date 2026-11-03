@@ -57,6 +57,8 @@ public class HaloClient : IHaloClient, IDisposable
 	/// </summary>
 	public string BaseUrl => _options.EffectiveBaseUrl;
 
+	internal HttpClient HttpClient => _httpClient;
+
 	private HttpClient CreateHttpClient()
 	{
 		var handler = new HttpClientHandler();
@@ -107,7 +109,7 @@ public class HaloClient : IHaloClient, IDisposable
 		};
 
 		// Add default headers
-		httpClient.DefaultRequestHeaders.Add("User-Agent", "Halo.Api/.NET");
+		httpClient.DefaultRequestHeaders.Add("User-Agent", _options.EffectiveUserAgent);
 		foreach (var header in _options.DefaultHeaders)
 		{
 			httpClient.DefaultRequestHeaders.Add(header.Key, header.Value);

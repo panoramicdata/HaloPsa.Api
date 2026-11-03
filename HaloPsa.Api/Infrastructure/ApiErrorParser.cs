@@ -15,13 +15,17 @@ namespace HaloPsa.Api.Infrastructure;
 /// </summary>
 internal static class ApiErrorParser
 {
+	private const string _messageKey = "message";
+	private const string _rawContentKey = "rawContent";
+
 	/// <summary>
 	/// Parses error details and validation errors out of a JSON error body.
 	/// </summary>
 	/// <param name="content">The response body, which need not be JSON.</param>
 	/// <returns>
-	/// The parsed details and validation errors. A body that is absent or empty yields nulls; a body
-	/// that is not valid JSON is returned intact under a <c>rawContent</c> key, so nothing is lost.
+	/// The parsed details and validation errors. A body that is absent or empty yields nulls; a JSON
+	/// object is read property by property; a JSON string is read, trimmed, under a <c>message</c> key;
+	/// any other body is returned intact under a <c>rawContent</c> key, so nothing is lost.
 	/// </returns>
 	public static (Dictionary<string, object?>? Details, ReadOnlyCollection<string>? ValidationErrors) ParseJsonContent(string? content)
 	{
@@ -33,14 +37,68 @@ internal static class ApiErrorParser
 		try
 		{
 			var jsonDoc = JsonDocument.Parse(content);
-			var details = ExtractErrorDetails(jsonDoc.RootElement);
-			var validationErrors = ExtractValidationErrors(jsonDoc.RootElement);
-			return (details, validationErrors);
+			var root = jsonDoc.RootElement;
+
+			if (root.ValueKind == JsonValueKind.Object)
+			{
+				return (ExtractErrorDetails(root), ExtractValidationErrors(root));
+			}
+
+			if (ReadStringMessage(root) is { } message)
+			{
+				return (new Dictionary<string, object?> { [_messageKey] = message }, null);
+			}
+
+			return (new Dictionary<string, object?> { [_rawContentKey] = content }, null);
 		}
 		catch (JsonException)
 		{
-			return (new Dictionary<string, object?> { ["rawContent"] = content }, null);
+			return (new Dictionary<string, object?> { [_rawContentKey] = content }, null);
 		}
+	}
+
+	/// <summary>
+	/// Reads the message from a body that is a bare JSON string, which is how Halo refuses some requests.
+	/// </summary>
+	/// <param name="content">The response body, which need not be JSON.</param>
+	/// <returns>The trimmed string, or null when the body is not a JSON string or the string is blank.</returns>
+	public static string? ReadStringBodyMessage(string? content)
+	{
+		if (string.IsNullOrEmpty(content))
+		{
+			return null;
+		}
+
+		try
+		{
+			using var jsonDoc = JsonDocument.Parse(content);
+			return ReadStringMessage(jsonDoc.RootElement);
+		}
+		catch (JsonException)
+		{
+			return null;
+		}
+	}
+
+	private static string? ReadStringMessage(JsonElement root)
+	{
+		if (root.ValueKind != JsonValueKind.String)
+		{
+			return null;
+		}
+
+		string? text;
+		try
+		{
+			text = root.GetString()?.Trim();
+		}
+		catch (InvalidOperationException)
+		{
+			// GetString throws for an escape that is not valid UTF-16, such as an unpaired surrogate.
+			return null;
+		}
+
+		return string.IsNullOrEmpty(text) ? null : text;
 	}
 
 	/// <summary>
@@ -80,7 +138,7 @@ internal static class ApiErrorParser
 	/// <returns>A list of validation error strings, or null if none found</returns>
 	public static ReadOnlyCollection<string>? ExtractValidationErrors(JsonElement rootElement)
 	{
-		if (!rootElement.TryGetProperty("errors", out var errorsElement))
+		if (rootElement.ValueKind != JsonValueKind.Object || !rootElement.TryGetProperty("errors", out var errorsElement))
 		{
 			return null;
 		}
@@ -110,6 +168,11 @@ internal static class ApiErrorParser
 	public static Dictionary<string, object?> ExtractErrorDetails(JsonElement element)
 	{
 		var details = new Dictionary<string, object?>();
+
+		if (element.ValueKind != JsonValueKind.Object)
+		{
+			return details;
+		}
 
 		foreach (var property in element.EnumerateObject())
 		{

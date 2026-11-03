@@ -2,7 +2,6 @@ using HaloPsa.Api.Exceptions;
 using HaloPsa.Api.Infrastructure;
 using HaloPsa.Api.Interfaces;
 using Refit;
-using System.Collections.ObjectModel;
 
 namespace HaloPsa.Api;
 
@@ -40,11 +39,14 @@ internal sealed class PsaApi(HttpClient _httpClient, bool? readOnly = null) : IP
 		}
 
 		var statusCode = (int)httpResponseMessage.StatusCode;
-		var message = httpResponseMessage.ReasonPhrase ?? $"API request failed with status {statusCode}";
 		var requestUrl = httpResponseMessage.RequestMessage?.RequestUri?.ToString();
 		var requestMethod = httpResponseMessage.RequestMessage?.Method.Method;
 
-		var (details, validationErrors) = await ParseResponseContentAsync(httpResponseMessage);
+		var content = await httpResponseMessage.Content.ReadAsStringAsync();
+		var (details, validationErrors) = ApiErrorParser.ParseJsonContent(content);
+		var message = ApiErrorParser.ReadStringBodyMessage(content)
+			?? httpResponseMessage.ReasonPhrase
+			?? $"API request failed with status {statusCode}";
 
 		var errorContext = new HaloApiErrorContext
 		{
@@ -57,15 +59,5 @@ internal sealed class PsaApi(HttpClient _httpClient, bool? readOnly = null) : IP
 		return ApiErrorParser.CreateExceptionForStatusCode(
 			statusCode, message, validationErrors,
 			requestUrl, httpResponseMessage.Headers, errorContext);
-	}
-
-	/// <summary>
-	/// Reads the response body and parses any error details out of it.
-	/// </summary>
-	private static async Task<(Dictionary<string, object?>? Details, ReadOnlyCollection<string>? ValidationErrors)> ParseResponseContentAsync(
-		HttpResponseMessage httpResponseMessage)
-	{
-		var content = await httpResponseMessage.Content.ReadAsStringAsync();
-		return ApiErrorParser.ParseJsonContent(content);
 	}
 }

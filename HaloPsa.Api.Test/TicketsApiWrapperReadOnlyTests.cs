@@ -22,7 +22,11 @@ namespace HaloPsa.Api.Test;
 /// </remarks>
 public class TicketsApiWrapperReadOnlyTests
 {
-	private static readonly UpdateTicketRequest _update = new() { Notes = "note" };
+	// Id 0 would fail validation on the list path, so a read-only refusal there proves it comes first.
+	private static readonly UpdateTicketRequest _update = new() { Status = 2 };
+
+	// ClientId 0 would also fail validation, so a read-only refusal proves it comes first.
+	private static readonly CreateTicketRequest _invalidCreate = new() { Summary = "S", ClientId = 0, UserId = 9 };
 
 	[Fact]
 	public void IsReadOnly_WhenTrue_IsReported()
@@ -58,6 +62,39 @@ public class TicketsApiWrapperReadOnlyTests
 	}
 
 	[Fact]
+	public async Task UpdateAsync_ThroughTheInterfaceList_WhenReadOnly_RefusesWithoutCallingTheApi()
+	{
+		var wrapper = new TicketsApiWrapper(new ThrowingTicketsApi(), readOnly: true);
+
+		var act = async () => await ((ITicketsApi)wrapper).UpdateAsync([_update], TestContext.Current.CancellationToken);
+
+		(await act.Should().ThrowAsync<InvalidOperationException>())
+			.WithMessage("*read-only*");
+	}
+
+	[Fact]
+	public async Task CreateAsync_WhenReadOnly_RefusesWithoutCallingTheApi()
+	{
+		var wrapper = new TicketsApiWrapper(new ThrowingTicketsApi(), readOnly: true);
+
+		var act = async () => await wrapper.CreateAsync(_invalidCreate, TestContext.Current.CancellationToken);
+
+		(await act.Should().ThrowAsync<InvalidOperationException>())
+			.WithMessage("*read-only*");
+	}
+
+	[Fact]
+	public async Task CreateAsync_WithAList_WhenReadOnly_RefusesWithoutCallingTheApi()
+	{
+		var wrapper = new TicketsApiWrapper(new ThrowingTicketsApi(), readOnly: true);
+
+		var act = async () => await wrapper.CreateAsync([_invalidCreate], TestContext.Current.CancellationToken);
+
+		(await act.Should().ThrowAsync<InvalidOperationException>())
+			.WithMessage("*read-only*");
+	}
+
+	[Fact]
 	public async Task DeleteAsync_WhenReadOnly_RefusesWithoutCallingTheApi()
 	{
 		var wrapper = new TicketsApiWrapper(new ThrowingTicketsApi(), readOnly: true);
@@ -67,14 +104,39 @@ public class TicketsApiWrapperReadOnlyTests
 		await act.Should().ThrowAsync<InvalidOperationException>();
 	}
 
+	// An id of 0 and a blank reason would each fail validation, so a read-only refusal proves it comes first.
+	[Fact]
+	public async Task DeleteAsync_WithAReason_WhenReadOnly_RefusesWithoutCallingTheApi()
+	{
+		var wrapper = new TicketsApiWrapper(new ThrowingTicketsApi(), readOnly: true);
+
+		var act = async () => await wrapper.DeleteAsync(0, " ", TestContext.Current.CancellationToken);
+
+		(await act.Should().ThrowAsync<InvalidOperationException>())
+			.WithMessage("*read-only*DeleteAsync*");
+	}
+
+	// A status, agent or team id of 0 and a blank note would each fail validation, so a read-only refusal in the next five proves it comes first.
 	[Fact]
 	public async Task CloseAsync_WhenReadOnly_RefusesWithoutCallingTheApi()
 	{
 		var wrapper = new TicketsApiWrapper(new ThrowingTicketsApi(), readOnly: true);
 
-		var act = async () => await wrapper.CloseAsync(1, "done", TestContext.Current.CancellationToken);
+		var act = async () => await wrapper.CloseAsync(1, 0, TestContext.Current.CancellationToken);
 
-		await act.Should().ThrowAsync<InvalidOperationException>();
+		(await act.Should().ThrowAsync<InvalidOperationException>())
+			.WithMessage("*read-only*CloseAsync*");
+	}
+
+	[Fact]
+	public async Task CloseAsync_WithANote_WhenReadOnly_RefusesWithoutCallingTheApi()
+	{
+		var wrapper = new TicketsApiWrapper(new ThrowingTicketsApi(), readOnly: true);
+
+		var act = async () => await wrapper.CloseAsync(1, 0, " ", TestContext.Current.CancellationToken);
+
+		(await act.Should().ThrowAsync<InvalidOperationException>())
+			.WithMessage("*read-only*CloseAsync*");
 	}
 
 	[Fact]
@@ -82,9 +144,21 @@ public class TicketsApiWrapperReadOnlyTests
 	{
 		var wrapper = new TicketsApiWrapper(new ThrowingTicketsApi(), readOnly: true);
 
-		var act = async () => await wrapper.AssignAsync(1, 2, TestContext.Current.CancellationToken);
+		var act = async () => await wrapper.AssignAsync(1, 0, TestContext.Current.CancellationToken);
 
-		await act.Should().ThrowAsync<InvalidOperationException>();
+		(await act.Should().ThrowAsync<InvalidOperationException>())
+			.WithMessage("*read-only*AssignAsync*");
+	}
+
+	[Fact]
+	public async Task AssignAsync_WithATeam_WhenReadOnly_RefusesWithoutCallingTheApi()
+	{
+		var wrapper = new TicketsApiWrapper(new ThrowingTicketsApi(), readOnly: true);
+
+		var act = async () => await wrapper.AssignAsync(1, 0, 0, TestContext.Current.CancellationToken);
+
+		(await act.Should().ThrowAsync<InvalidOperationException>())
+			.WithMessage("*read-only*AssignAsync*");
 	}
 
 	[Fact]
@@ -92,9 +166,10 @@ public class TicketsApiWrapperReadOnlyTests
 	{
 		var wrapper = new TicketsApiWrapper(new ThrowingTicketsApi(), readOnly: true);
 
-		var act = async () => await wrapper.ReopenAsync(1, "again", TestContext.Current.CancellationToken);
+		var act = async () => await wrapper.ReopenAsync(1, 0, TestContext.Current.CancellationToken);
 
-		await act.Should().ThrowAsync<InvalidOperationException>();
+		(await act.Should().ThrowAsync<InvalidOperationException>())
+			.WithMessage("*read-only*ReopenAsync*");
 	}
 
 	[Fact]
@@ -139,29 +214,17 @@ public class TicketsApiWrapperReadOnlyTests
 		public Task<CreateTicketResponse> CreateAsync(CreateTicketRequest request, CancellationToken cancellationToken)
 			=> ThrowIfReached<Task<CreateTicketResponse>>(request, cancellationToken);
 
-		public Task<UpdateTicketResponse> UpdateAsync(int id, UpdateTicketRequest request, CancellationToken cancellationToken)
-			=> ThrowIfReached<Task<UpdateTicketResponse>>(id, request, cancellationToken);
+		public Task<CreateTicketResponse> CreateAsync(IReadOnlyList<CreateTicketRequest> requests, CancellationToken cancellationToken)
+			=> ThrowIfReached<Task<CreateTicketResponse>>(requests, cancellationToken);
+
+		public Task<UpdateTicketResponse> UpdateAsync(IReadOnlyList<UpdateTicketRequest> requests, CancellationToken cancellationToken)
+			=> ThrowIfReached<Task<UpdateTicketResponse>>(requests, cancellationToken);
 
 		public Task DeleteAsync(int id, CancellationToken cancellationToken)
 			=> ThrowIfReached<Task>(id, cancellationToken);
 
-		public Task<UpdateTicketResponse> CloseAsync(int id, string resolution, CancellationToken cancellationToken)
-			=> ThrowIfReached<Task<UpdateTicketResponse>>(id, resolution, cancellationToken);
-
-		public Task<UpdateTicketResponse> CloseAsync(int id, CancellationToken cancellationToken)
-			=> ThrowIfReached<Task<UpdateTicketResponse>>(id, cancellationToken);
-
-		public Task<UpdateTicketResponse> ReopenAsync(int id, string reason, CancellationToken cancellationToken)
-			=> ThrowIfReached<Task<UpdateTicketResponse>>(id, reason, cancellationToken);
-
-		public Task<UpdateTicketResponse> ReopenAsync(int id, CancellationToken cancellationToken)
-			=> ThrowIfReached<Task<UpdateTicketResponse>>(id, cancellationToken);
-
-		public Task<UpdateTicketResponse> AssignAsync(int id, int agentId, CancellationToken cancellationToken)
-			=> ThrowIfReached<Task<UpdateTicketResponse>>(id, agentId, cancellationToken);
-
-		public Task<UpdateTicketResponse> AssignAsync(int id, int agentId, int teamId, CancellationToken cancellationToken)
-			=> ThrowIfReached<Task<UpdateTicketResponse>>(id, agentId, teamId, cancellationToken);
+		public Task DeleteAsync(int id, string reason, CancellationToken cancellationToken)
+			=> ThrowIfReached<Task>(id, reason, cancellationToken);
 
 		private static T ThrowIfReached<T>(params object?[] arguments)
 		{

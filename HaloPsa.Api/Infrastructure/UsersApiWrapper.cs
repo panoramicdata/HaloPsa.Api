@@ -25,6 +25,14 @@ public class UsersApiWrapper(IUsersRefitApi usersRefitApi) : IUsersApi
 		return await usersRefitApi.GetResponseAsync(cancellationToken);
 	}
 
+	/// <inheritdoc />
+	public async Task<IReadOnlyList<User>> GetAllAsync(UserFilter? filter, CancellationToken cancellationToken)
+		=> (await GetResponseAsync(filter, cancellationToken).ConfigureAwait(false)).Users;
+
+	/// <inheritdoc />
+	public Task<UsersResponse> GetResponseAsync(UserFilter? filter, CancellationToken cancellationToken)
+		=> usersRefitApi.GetResponseAsync(filter, cancellationToken);
+
 	/// <summary>
 	/// Get a user by ID
 	/// </summary>
