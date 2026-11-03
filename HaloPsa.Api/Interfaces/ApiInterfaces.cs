@@ -46,6 +46,21 @@ public interface IClientsApi
     /// Get all clients - Returns wrapped response with metadata
     /// </summary>
     Task<ClientsResponse> GetResponseAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Get clients matching a filter - Returns wrapped response with metadata
+    /// </summary>
+    Task<ClientsResponse> GetResponseAsync(ClientFilter? filter, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Get every client matching a filter, paging to the end
+    /// </summary>
+    Task<IReadOnlyList<Client>> GetAllPagedAsync(ClientFilter? filter, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Get a client by ID, optionally with its details
+    /// </summary>
+    Task<Client> GetByIdAsync(int id, bool includeDetails, CancellationToken cancellationToken);
 }
 
 /// <summary>Interface for ticket type management operations</summary> 
@@ -123,6 +138,14 @@ public interface IClientsRefitApi
     /// <summary>Gets a client by ID</summary>
     [Get("/api/Client/{id}")]
     Task<Client> GetByIdAsync(int id, CancellationToken cancellationToken);
+
+    /// <summary>Gets clients matching a filter with response wrapper</summary>
+    [Get("/api/Client")]
+    Task<ClientsResponse> GetResponseAsync([Query] ClientFilter? filter, CancellationToken cancellationToken);
+
+    /// <summary>Gets a client by ID, optionally with its details</summary>
+    [Get("/api/Client/{id}")]
+    Task<Client> GetByIdAsync(int id, [Query][AliasAs("includedetails")] bool includeDetails, CancellationToken cancellationToken);
 }
 
 /// <summary>Internal Refit interface for TicketTypes API</summary>
