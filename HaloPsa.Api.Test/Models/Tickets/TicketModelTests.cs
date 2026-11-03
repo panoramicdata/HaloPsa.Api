@@ -263,15 +263,15 @@ public class TicketModelTests
 		// Act
 		var request = new UpdateTicketRequest
 		{
-			Id = 12,
-			Status = 9,
+			Id = 901,
+			Status = 31,
 			ClosureNote = "Issue resolved successfully",
 			CustomFields = customFields
 		};
 
 		// Assert
-		_ = request.Id.Should().Be(12);
-		_ = request.Status.Should().Be(9);
+		_ = request.Id.Should().Be(901);
+		_ = request.Status.Should().Be(31);
 		_ = request.ClosureNote.Should().Be("Issue resolved successfully");
 		_ = request.CustomFields.Should().BeEquivalentTo(customFields);
 	}

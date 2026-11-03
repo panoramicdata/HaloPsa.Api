@@ -31,7 +31,7 @@ await client.Psa.Projects.GetAllAsync(cancellationToken);                  // �
 // CRUD Operations - Full Implementation Working ✅
 await client.Psa.Users.GetByIdAsync(userId, cancellationToken);            // ✅ Working
 await client.Psa.Tickets.CreateAsync(createRequest, cancellationToken);    // ✅ Working
-await client.Psa.Tickets.UpdateAsync(ticketId, updateRequest, cancellationToken); // ✅ Working
+await client.Psa.Tickets.UpdateAsync(ticketId, updateRequest, cancellationToken); // POST /api/Tickets
 await client.Psa.Tickets.DeleteAsync(ticketId, cancellationToken);         // ✅ Working
 ```
 
@@ -126,8 +126,11 @@ await client.Psa.TicketTypes.GetAllAsync(cancellationToken);    // ✅ 31 types
 await client.Psa.Tickets.GetAllAsync(filter, cancellationToken);
 await client.Psa.Tickets.CreateAsync(request, cancellationToken);
 await client.Psa.Tickets.UpdateAsync(id, request, cancellationToken);
-await client.Psa.Tickets.CloseAsync(id, resolution, cancellationToken);
+await client.Psa.Tickets.CloseAsync(id, closedStatusId, cancellationToken);
+await client.Psa.Tickets.CloseAsync(id, closedStatusId, closureNote, cancellationToken);
+await client.Psa.Tickets.ReopenAsync(id, openStatusId, cancellationToken);
 await client.Psa.Tickets.AssignAsync(id, agentId, cancellationToken);
+await client.Psa.Tickets.AssignAsync(id, agentId, teamId, cancellationToken);
 await client.Psa.Tickets.DeleteAsync(id, cancellationToken);
 ```
 

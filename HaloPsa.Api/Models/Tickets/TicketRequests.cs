@@ -155,7 +155,7 @@ public record CreateTicketRequest
 public record UpdateTicketRequest
 {
 	/// <summary>
-	/// The ticket to update. UpdateAsync sets it from its id argument, replacing any value here.
+	/// The ticket to update; required on ITicketsApi's list overload. TicketsApiWrapper.UpdateAsync(id, request) replaces it with its id argument.
 	/// </summary>
 	[JsonPropertyName("id")]
 	public int Id { get; init; }

@@ -20,7 +20,7 @@ A comprehensive, modern .NET library for interacting with the [Halo PSA](https:/
 - 🚀 **Modern .NET** - Built for .NET 9 with modern C# features
 - 🔒 **Type Safety** - Strongly typed models and responses
 - 📝 **Comprehensive Logging** - Built-in logging and request/response interception
-- 🔄 **Retry Logic** - Automatic retry with exponential backoff
+- 🔄 **Retry Logic** - Automatic retry with exponential backoff; a POST is retried only on 429 Too Many Requests
 - 📖 **Rich Documentation** - IntelliSense-friendly XML documentation
 - ✅ **Thoroughly Tested** - Comprehensive unit and integration tests
 - ⚡ **High Performance** - Optimized for efficiency and low memory usage

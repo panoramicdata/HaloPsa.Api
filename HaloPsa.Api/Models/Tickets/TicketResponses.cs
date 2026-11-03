@@ -92,11 +92,13 @@ public record CreateTicketResponse
 	/// <summary>
 	/// Whether the creation was successful
 	/// </summary>
+	/// <remarks>Never read from Halo's response; always true.</remarks>
 	public bool Success { get; init; } = true;
 
 	/// <summary>
 	/// Any messages or warnings from the creation
 	/// </summary>
+	/// <remarks>Never read from Halo's response; always null.</remarks>
 	public IReadOnlyList<string>? Messages { get; init; }
 
 	/// <summary>
@@ -144,11 +146,13 @@ public record UpdateTicketResponse
 	/// <summary>
 	/// Whether the update was successful
 	/// </summary>
+	/// <remarks>Never read from Halo's response; always true.</remarks>
 	public bool Success { get; init; } = true;
 
 	/// <summary>
 	/// Any messages or warnings from the update
 	/// </summary>
+	/// <remarks>Never read from Halo's response; always null.</remarks>
 	public IReadOnlyList<string>? Messages { get; init; }
 
 	/// <summary>
