@@ -11,17 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CreateTicketRequest` is now sent under Halo's names (`client_id`, `site_id`, `user_id`, `status_id`, `priority_id`, `team_id`, `categoryid_1`, `tickettype_id`, `dateoccurred` and others), as the one-element array `POST /api/Tickets` takes. Before this Halo did not bind the client, site, user, custom fields or assets of a created ticket.
 - Asset ids are sent as `assets: [{"id":...}]` and tags as `tags: [{"text":...}]`; unset fields are no longer sent.
 - A ticket create's response is read whether Halo returns the ticket, an array of tickets or a `ticket` wrapper. A response that cannot be read says the ticket may have been created and gives its id.
+- `User` reads from Halo's response again: an unreleased change had given it a constructor that System.Text.Json cannot bind.
 
 ### Added
 - `CreateTicketRequest.DetailsHtml` and `TargetDate`; `CustomFieldInput`; a list overload of `CreateAsync`.
 - `CreateTicketResponse.Tickets`.
 - `ClientFilter` (`includeinactive`, `include_custom_fields`, `pageinate`, `page_size`, `page_no`, `search`, `exclude_internal`, `count`), `ClientsApiWrapper.GetResponseAsync(ClientFilter?)`, `GetAllPagedAsync`, which pages to the end with the same checks as the site read, and `GetByIdAsync(id, includeDetails)`.
 - `Client.CustomFields`.
+- `User.Login`, `FirstName`, `Surname`, `EmailAddress2`, `EmailAddress3` and `LinkedAgentId`; `UserFilter` (`search`, `client_id`, `includeinactive`, `exclude_agents`, `pageinate`, `page_size`, `page_no`) with `UsersApiWrapper.GetResponseAsync(UserFilter?)` and `GetAllAsync(UserFilter?)`.
 
 ### Changed
 - `CreateTicketRequest.CustomFields` is now `IReadOnlyList<CustomFieldInput>`, sent as `customfields: [{"id":...,"value":...}]`. Replace a dictionary keyed by field id with one `CustomFieldInput` per field.
 - `CreateTicketRequest.SuppressEmails` and `Notes` are obsolete and never sent: Halo's ticket create has no such fields.
 - `TicketsApiWrapper.CreateAsync` refuses a `ClientId` or `UserId` that is not positive, and a `SiteId` that is set but not positive, before sending anything. Halo rejects 0, and -1 is its 'not set' value.
+- `User.Username` is obsolete and returns `Login`: Halo's Users record has no `username` field, so it was never filled.
 
 ### Fixed (#72)
 - `TicketFilter` is now sent under Halo's parameter names (`client_id`, `requesttype_id`, `open_only`, `pageinate`, `page_size`, `mine`, `lastupdatefromdate` and others). Before this, Halo silently ignored most filters and returned unfiltered results.

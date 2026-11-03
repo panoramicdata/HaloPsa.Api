@@ -24,6 +24,16 @@ public interface IUsersApi
     Task<UsersResponse> GetResponseAsync(CancellationToken cancellationToken);
 
     /// <summary>
+    /// Get users matching a filter - Convenience method that returns unwrapped array
+    /// </summary>
+    Task<IReadOnlyList<User>> GetAllAsync(UserFilter? filter, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Get users matching a filter - Returns wrapped response with metadata
+    /// </summary>
+    Task<UsersResponse> GetResponseAsync(UserFilter? filter, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Get a user by ID
     /// </summary>
     Task<User> GetByIdAsync(int id, CancellationToken cancellationToken);
@@ -122,6 +132,10 @@ public interface IUsersRefitApi
     /// <summary>Gets all users with response wrapper</summary>
     [Get("/api/Users")]
     Task<UsersResponse> GetResponseAsync(CancellationToken cancellationToken);
+
+    /// <summary>Gets users matching a filter with response wrapper</summary>
+    [Get("/api/Users")]
+    Task<UsersResponse> GetResponseAsync([Query] UserFilter? filter, CancellationToken cancellationToken);
 
     /// <summary>Gets a user by ID</summary>
     [Get("/api/Users/{id}")]
