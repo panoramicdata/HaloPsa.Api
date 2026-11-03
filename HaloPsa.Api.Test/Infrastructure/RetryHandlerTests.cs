@@ -15,7 +15,7 @@ public class RetryHandlerTests
 	{
 		var stub = new SequencingHandler(HttpStatusCode.ServiceUnavailable, HttpStatusCode.OK);
 
-		using var response = await SendAsync(stub, HttpMethod.Post, TestContext.Current.CancellationToken);
+		using var response = await SendThroughRetryHandlerAsync(stub, HttpMethod.Post, TestContext.Current.CancellationToken);
 
 		_ = stub.CallCount.Should().Be(1);
 		_ = response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
@@ -26,7 +26,7 @@ public class RetryHandlerTests
 	{
 		var stub = new SequencingHandler(HttpStatusCode.RequestTimeout, HttpStatusCode.OK);
 
-		using var response = await SendAsync(stub, HttpMethod.Post, TestContext.Current.CancellationToken);
+		using var response = await SendThroughRetryHandlerAsync(stub, HttpMethod.Post, TestContext.Current.CancellationToken);
 
 		_ = stub.CallCount.Should().Be(1);
 		_ = response.StatusCode.Should().Be(HttpStatusCode.RequestTimeout);
@@ -37,7 +37,7 @@ public class RetryHandlerTests
 	{
 		var stub = new SequencingHandler(new HttpRequestException("connection reset"), HttpStatusCode.OK);
 
-		var act = () => SendAsync(stub, HttpMethod.Post, TestContext.Current.CancellationToken);
+		var act = () => SendThroughRetryHandlerAsync(stub, HttpMethod.Post, TestContext.Current.CancellationToken);
 
 		_ = await act.Should().ThrowAsync<HttpRequestException>();
 		_ = stub.CallCount.Should().Be(1);
@@ -48,7 +48,7 @@ public class RetryHandlerTests
 	{
 		var stub = new SequencingHandler(HttpStatusCode.TooManyRequests, HttpStatusCode.OK);
 
-		using var response = await SendAsync(stub, HttpMethod.Post, TestContext.Current.CancellationToken);
+		using var response = await SendThroughRetryHandlerAsync(stub, HttpMethod.Post, TestContext.Current.CancellationToken);
 
 		_ = stub.CallCount.Should().Be(2);
 		_ = response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -78,7 +78,7 @@ public class RetryHandlerTests
 	{
 		var stub = new SequencingHandler(HttpStatusCode.ServiceUnavailable, HttpStatusCode.OK);
 
-		using var response = await SendAsync(stub, HttpMethod.Get, TestContext.Current.CancellationToken);
+		using var response = await SendThroughRetryHandlerAsync(stub, HttpMethod.Get, TestContext.Current.CancellationToken);
 
 		_ = stub.CallCount.Should().Be(2);
 		_ = response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -89,7 +89,7 @@ public class RetryHandlerTests
 	{
 		var stub = new SequencingHandler(HttpStatusCode.ServiceUnavailable, HttpStatusCode.OK);
 
-		using var response = await SendAsync(stub, HttpMethod.Delete, TestContext.Current.CancellationToken);
+		using var response = await SendThroughRetryHandlerAsync(stub, HttpMethod.Delete, TestContext.Current.CancellationToken);
 
 		_ = stub.CallCount.Should().Be(2);
 		_ = response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -100,7 +100,7 @@ public class RetryHandlerTests
 	{
 		var stub = new SequencingHandler(new TaskCanceledException("cancelled"), HttpStatusCode.OK);
 
-		var act = () => SendAsync(stub, HttpMethod.Get, new CancellationToken(canceled: true));
+		var act = () => SendThroughRetryHandlerAsync(stub, HttpMethod.Get, new CancellationToken(canceled: true));
 
 		_ = await act.Should().ThrowAsync<TaskCanceledException>();
 		_ = stub.CallCount.Should().Be(1);
@@ -117,7 +117,7 @@ public class RetryHandlerTests
 			InnerHandler = stub
 		};
 
-	private static async Task<HttpResponseMessage> SendAsync(SequencingHandler stub, HttpMethod method, CancellationToken cancellationToken)
+	private static async Task<HttpResponseMessage> SendThroughRetryHandlerAsync(SequencingHandler stub, HttpMethod method, CancellationToken cancellationToken)
 	{
 		using var handler = CreateRetryHandler(stub);
 		using var invoker = new HttpMessageInvoker(handler, disposeHandler: false);

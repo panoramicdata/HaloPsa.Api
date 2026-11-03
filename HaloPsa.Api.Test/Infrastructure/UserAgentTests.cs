@@ -94,6 +94,7 @@ public class UserAgentTests
 
 		protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
 		{
+			cancellationToken.ThrowIfCancellationRequested();
 			Requests.Add(new TokenRequest(request.RequestUri!.AbsolutePath, request.Headers.UserAgent.ToString()));
 
 			return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
