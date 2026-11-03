@@ -50,6 +50,142 @@ public class UpdateTicketResponseTests
 	}
 
 	[Fact]
+	public void Read_ATicketWrapperWithSuccessFalseAndMessages_ReturnsThemAndStillReturnsTheTicket()
+	{
+		var response = Read($$"""{"ticket":{{T901}},"success":false,"messages":["Category is mandatory","Check the client"]}""");
+
+		_ = response.TicketId.Should().Be(901);
+		_ = response.Success.Should().BeFalse();
+		_ = response.Messages.Should().Equal("Category is mandatory", "Check the client");
+	}
+
+	[Fact]
+	public void Read_ATicketWrapperWithASingleStringMessage_ReturnsOneMessage()
+	{
+		var response = Read($$"""{"ticket":{{T901}},"success":true,"messages":"Saved with a warning"}""");
+
+		_ = response.Success.Should().BeTrue();
+		_ = response.Messages.Should().Equal("Saved with a warning");
+	}
+
+	[Fact]
+	public void Read_ATicketWrapper_ReadsSuccessAndMessagesWhateverTheCaseOfTheirNames()
+	{
+		var response = Read($$"""{"Ticket":{{T901}},"Success":false,"Messages":["m"]}""");
+
+		_ = response.Success.Should().BeFalse();
+		_ = response.Messages.Should().Equal("m");
+	}
+
+	[Fact]
+	public void Read_ATicketWrapper_KeepsOnlyTheNonBlankStringMessages()
+	{
+		var response = Read($$"""{"ticket":{{T901}},"messages":["a",null,7,{"x":1},"  ","b"]}""");
+
+		_ = response.TicketId.Should().Be(901);
+		_ = response.Messages.Should().Equal("a", "b");
+	}
+
+	[Theory]
+	[InlineData("[]")]
+	[InlineData("[null,3]")]
+	[InlineData("null")]
+	[InlineData("\"\"")]
+	[InlineData("\"  \"")]
+	[InlineData("""{"x":"y"}""")]
+	public void Read_ATicketWrapperWithNoReadableMessage_LeavesMessagesNull(string messages)
+	{
+		var response = Read($$"""{"ticket":{{T901}},"messages":{{messages}}}""");
+
+		_ = response.TicketId.Should().Be(901);
+		_ = response.Messages.Should().BeNull();
+	}
+
+	[Theory]
+	[InlineData("\"false\"", false)]
+	[InlineData("\"TRUE\"", true)]
+	[InlineData("0", false)]
+	[InlineData("1", true)]
+	public void Read_ATicketWrapperWhoseSuccessIsABooleanStringOrNumber_ReadsIt(string success, bool expected)
+	{
+		var response = Read($$"""{"ticket":{{T901}},"success":{{success}}}""");
+
+		_ = response.Success.Should().Be(expected);
+	}
+
+	[Theory]
+	[InlineData("null")]
+	[InlineData("\"maybe\"")]
+	[InlineData("2")]
+	public void Read_ATicketWrapperWhoseSuccessCannotBeRead_KeepsTheDefault(string success)
+	{
+		var response = Read($$"""{"ticket":{{T901}},"success":{{success}}}""");
+
+		_ = response.Success.Should().BeTrue();
+	}
+
+	[Fact]
+	public void Read_ATicketWrapperWithNeitherSuccessNorMessages_KeepsTheDefaults()
+	{
+		var response = Read($$"""{"ticket":{{T901}}}""");
+
+		_ = response.Success.Should().BeTrue();
+		_ = response.Messages.Should().BeNull();
+	}
+
+	[Fact]
+	public void Read_ABareTicket_KeepsTheDefaults()
+	{
+		var response = Read(T901);
+
+		_ = response.Success.Should().BeTrue();
+		_ = response.Messages.Should().BeNull();
+	}
+
+	[Fact]
+	public void Read_AnArrayOfTickets_KeepsTheDefaults()
+	{
+		var response = Read($"[{T901},{T902}]");
+
+		_ = response.Success.Should().BeTrue();
+		_ = response.Messages.Should().BeNull();
+	}
+
+	[Fact]
+	public void Read_ABareTicketCarryingSuccessAndMessagesProperties_DoesNotTreatThemAsTheWrappers()
+	{
+		var response = Read("""{"id":901,"summary":"S","status_id":1,"client_id":21,"user_id":9,"success":false,"messages":["m"]}""");
+
+		_ = response.Success.Should().BeTrue();
+		_ = response.Messages.Should().BeNull();
+	}
+
+	[Fact]
+	public void Write_ThenRead_PreservesTheTicketSuccessAndMessages()
+	{
+		var original = Read($$"""{"ticket":{{T901}},"success":false,"messages":["Category is mandatory","Check the client"]}""");
+
+		var roundTripped = Read(JsonSerializer.Serialize(original));
+
+		_ = roundTripped.TicketId.Should().Be(901);
+		_ = roundTripped.Success.Should().BeFalse();
+		_ = roundTripped.Messages.Should().Equal("Category is mandatory", "Check the client");
+	}
+
+	[Fact]
+	public void Write_ThenRead_PreservesTheDefaultSuccessAndNullMessages()
+	{
+		var json = JsonSerializer.Serialize(Read(T901));
+
+		var roundTripped = Read(json);
+
+		_ = json.Should().NotContain("messages");
+		_ = roundTripped.TicketId.Should().Be(901);
+		_ = roundTripped.Success.Should().BeTrue();
+		_ = roundTripped.Messages.Should().BeNull();
+	}
+
+	[Fact]
 	public void Read_AnEmptyArray_Throws()
 	{
 		var act = () => Read("[]");
@@ -83,6 +219,7 @@ public class UpdateTicketResponseTests
 	[InlineData("42", "901")]
 	[InlineData("[]", "901")]
 	[InlineData("""{"id":903}""", "903")]
+	[InlineData("""{"success":false,"messages":["m"],"ticket":{"id":903}}""", "903")]
 	public async Task UpdateAsync_WhenHaloAnswersOkWithABodyThatCannotBeRead_ThrowsAnErrorSayingTheUpdateMayHaveBeenApplied(string body, string expectedId)
 	{
 		var handler = new CapturingHandler(body);

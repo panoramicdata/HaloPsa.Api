@@ -92,13 +92,13 @@ public record CreateTicketResponse
 	/// <summary>
 	/// Whether the creation was successful
 	/// </summary>
-	/// <remarks>Never read from Halo's response; always true.</remarks>
+	/// <remarks>Halo's <c>success</c> when it wraps the ticket as <c>{"ticket":...}</c> and gives a JSON boolean, the string "true" or "false", or 0 or 1; otherwise true, as for a bare ticket or an array. A false value is returned, not thrown, and the ticket Halo sent is still in <see cref="Ticket"/>.</remarks>
 	public bool Success { get; init; } = true;
 
 	/// <summary>
 	/// Any messages or warnings from the creation
 	/// </summary>
-	/// <remarks>Never read from Halo's response; always null.</remarks>
+	/// <remarks>Halo's <c>messages</c> (an array of strings, or one string) when it wraps the ticket; non-string and blank items are skipped. Null when absent or when none remain.</remarks>
 	public IReadOnlyList<string>? Messages { get; init; }
 
 	/// <summary>
@@ -118,13 +118,13 @@ internal sealed class CreateTicketResponseConverter : JsonConverter<CreateTicket
 
 	public override CreateTicketResponse Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
 	{
-		var tickets = TicketResponseReader.Read(ref reader, options, "create", nameof(CreateTicketResponse), UnreadableMessage);
+		var content = TicketResponseReader.Read(ref reader, options, "create", nameof(CreateTicketResponse), UnreadableMessage);
 
-		return new CreateTicketResponse { Ticket = tickets[0], Tickets = tickets };
+		return new CreateTicketResponse { Ticket = content.Tickets[0], Tickets = content.Tickets, Success = content.Success, Messages = content.Messages };
 	}
 
 	public override void Write(Utf8JsonWriter writer, CreateTicketResponse value, JsonSerializerOptions options)
-		=> JsonSerializer.Serialize(writer, value.Ticket, options);
+		=> TicketResponseReader.Write(writer, value.Ticket, value.Success, value.Messages, options);
 }
 
 /// <summary>
@@ -146,13 +146,13 @@ public record UpdateTicketResponse
 	/// <summary>
 	/// Whether the update was successful
 	/// </summary>
-	/// <remarks>Never read from Halo's response; always true.</remarks>
+	/// <remarks>Halo's <c>success</c> when it wraps the ticket as <c>{"ticket":...}</c> and gives a JSON boolean, the string "true" or "false", or 0 or 1; otherwise true, as for a bare ticket or an array. A false value is returned, not thrown, and the ticket Halo sent is still in <see cref="Ticket"/>.</remarks>
 	public bool Success { get; init; } = true;
 
 	/// <summary>
 	/// Any messages or warnings from the update
 	/// </summary>
-	/// <remarks>Never read from Halo's response; always null.</remarks>
+	/// <remarks>Halo's <c>messages</c> (an array of strings, or one string) when it wraps the ticket; non-string and blank items are skipped. Null when absent or when none remain.</remarks>
 	public IReadOnlyList<string>? Messages { get; init; }
 
 	/// <summary>
@@ -172,19 +172,22 @@ internal sealed class UpdateTicketResponseConverter : JsonConverter<UpdateTicket
 
 	public override UpdateTicketResponse Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
 	{
-		var tickets = TicketResponseReader.Read(ref reader, options, "update", nameof(UpdateTicketResponse), UnreadableMessage);
+		var content = TicketResponseReader.Read(ref reader, options, "update", nameof(UpdateTicketResponse), UnreadableMessage);
 
-		return new UpdateTicketResponse { Ticket = tickets[0], Tickets = tickets };
+		return new UpdateTicketResponse { Ticket = content.Tickets[0], Tickets = content.Tickets, Success = content.Success, Messages = content.Messages };
 	}
 
 	public override void Write(Utf8JsonWriter writer, UpdateTicketResponse value, JsonSerializerOptions options)
-		=> JsonSerializer.Serialize(writer, value.Ticket, options);
+		=> TicketResponseReader.Write(writer, value.Ticket, value.Success, value.Messages, options);
 }
+
+// What a ticket write response carries: the tickets, and the wrapper's "success" and "messages" when it has them.
+internal readonly record struct TicketResponseContent(IReadOnlyList<Ticket> Tickets, bool Success, IReadOnlyList<string>? Messages);
 
 // The shape logic shared by the create and update converters: a bare ticket, an array of tickets or a "ticket" wrapper.
 internal static class TicketResponseReader
 {
-	internal static List<Ticket> Read(ref Utf8JsonReader reader, JsonSerializerOptions options, string operation, string responseType, Func<string, string> unreadableMessage)
+	internal static TicketResponseContent Read(ref Utf8JsonReader reader, JsonSerializerOptions options, string operation, string responseType, Func<string, string> unreadableMessage)
 	{
 		using var document = JsonDocument.ParseValue(ref reader);
 		var root = document.RootElement;
@@ -199,25 +202,89 @@ internal static class TicketResponseReader
 					throw new JsonException($"Halo returned an empty array for a ticket {operation}, so no ticket id can be read.");
 				}
 
-				return tickets;
+				return new TicketResponseContent(tickets, Success: true, Messages: null);
 			case JsonValueKind.Object:
-				return [ReadTicket(UnwrapTicket(root), options, unreadableMessage)];
+				return ReadObject(root, options, unreadableMessage);
 			default:
 				throw new JsonException($"Expected an array or an object for {responseType}, but found {root.ValueKind}.");
 		}
 	}
 
-	private static JsonElement UnwrapTicket(JsonElement root)
+	// "success" and "messages" are read only from a wrapper: a bare ticket is the ticket's own fields.
+	private static TicketResponseContent ReadObject(JsonElement root, JsonSerializerOptions options, Func<string, string> unreadableMessage)
 	{
+		JsonElement? ticket = null;
+		bool? success = null;
+		IReadOnlyList<string>? messages = null;
+
 		foreach (var property in root.EnumerateObject())
 		{
-			if (string.Equals(property.Name, "ticket", StringComparison.OrdinalIgnoreCase) && property.Value.ValueKind == JsonValueKind.Object)
+			var value = property.Value;
+
+			if (IsNamed(property, "ticket") && value.ValueKind == JsonValueKind.Object)
 			{
-				return property.Value;
+				ticket ??= value;
+			}
+			else if (IsNamed(property, "success") && ReadBoolean(value) is { } flag)
+			{
+				success ??= flag;
+			}
+			else if (IsNamed(property, "messages"))
+			{
+				messages ??= ReadMessages(value);
 			}
 		}
 
-		return root;
+		return ticket is { } wrapped
+			? new TicketResponseContent([ReadTicket(wrapped, options, unreadableMessage)], success ?? true, messages)
+			: new TicketResponseContent([ReadTicket(root, options, unreadableMessage)], Success: true, Messages: null);
+	}
+
+	// Writes the wrapper shape Read accepts, so Success and Messages survive a round trip; messages whenever not null.
+	internal static void Write(Utf8JsonWriter writer, Ticket ticket, bool success, IReadOnlyList<string>? messages, JsonSerializerOptions options)
+	{
+		writer.WriteStartObject();
+		writer.WritePropertyName(PropertyName("ticket", options));
+		JsonSerializer.Serialize(writer, ticket, options);
+		writer.WriteBoolean(PropertyName("success", options), success);
+
+		if (messages is not null)
+		{
+			writer.WritePropertyName(PropertyName("messages", options));
+			JsonSerializer.Serialize(writer, messages, options);
+		}
+
+		writer.WriteEndObject();
+	}
+
+	private static string PropertyName(string name, JsonSerializerOptions options)
+		=> options.PropertyNamingPolicy?.ConvertName(name) ?? name;
+
+	private static bool IsNamed(JsonProperty property, string name)
+		=> string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase);
+
+	// A JSON boolean, the strings "true" or "false", or 0 or 1; anything else is not read, so it cannot pass for either.
+	private static bool? ReadBoolean(JsonElement value) => value.ValueKind switch
+	{
+		JsonValueKind.True => true,
+		JsonValueKind.False => false,
+		JsonValueKind.String when bool.TryParse(value.GetString(), out var parsed) => parsed,
+		JsonValueKind.Number when value.TryGetInt32(out var number) && number is 0 or 1 => number == 1,
+		_ => null
+	};
+
+	private static List<string>? ReadMessages(JsonElement value)
+	{
+		List<string> messages = value.ValueKind switch
+		{
+			JsonValueKind.String => [value.GetString()!],
+			JsonValueKind.Array => [.. value.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.String).Select(item => item.GetString()!)],
+			_ => []
+		};
+
+		_ = messages.RemoveAll(string.IsNullOrWhiteSpace);
+
+		return messages.Count == 0 ? null : messages;
 	}
 
 	private static Ticket ReadTicket(JsonElement element, JsonSerializerOptions options, Func<string, string> unreadableMessage)
