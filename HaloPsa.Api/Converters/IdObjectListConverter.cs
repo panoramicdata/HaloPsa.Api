@@ -10,30 +10,15 @@ internal sealed class IdObjectListConverter : JsonConverter<IReadOnlyList<int>>
 {
 	/// <inheritdoc />
 	public override IReadOnlyList<int> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-	{
-		if (reader.TokenType != JsonTokenType.StartArray)
-		{
-			throw new JsonException($"Expected an array of id objects, but found {reader.TokenType}.");
-		}
+		=> JsonArrayReader.Read(ref reader, "id objects", ReadId);
 
-		var ids = new List<int>();
-		while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
-		{
-			using var document = JsonDocument.ParseValue(ref reader);
-			var item = document.RootElement;
-
-			if (item.ValueKind != JsonValueKind.Object
-				|| !item.TryGetProperty("id", out var id)
-				|| !id.TryGetInt32(out var value))
-			{
-				throw new JsonException("Expected an object with an integer \"id\".");
-			}
-
-			ids.Add(value);
-		}
-
-		return ids;
-	}
+	private static int ReadId(JsonElement item)
+		=> item.ValueKind == JsonValueKind.Object
+			&& item.TryGetProperty("id", out var id)
+			&& id.ValueKind == JsonValueKind.Number
+			&& id.TryGetInt32(out var value)
+				? value
+				: throw new JsonException("Expected an object with an integer \"id\".");
 
 	/// <inheritdoc />
 	public override void Write(Utf8JsonWriter writer, IReadOnlyList<int> value, JsonSerializerOptions options)

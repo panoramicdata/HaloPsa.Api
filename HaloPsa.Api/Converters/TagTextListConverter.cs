@@ -10,30 +10,14 @@ internal sealed class TagTextListConverter : JsonConverter<IReadOnlyList<string>
 {
 	/// <inheritdoc />
 	public override IReadOnlyList<string> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-	{
-		if (reader.TokenType != JsonTokenType.StartArray)
-		{
-			throw new JsonException($"Expected an array of tag objects, but found {reader.TokenType}.");
-		}
+		=> JsonArrayReader.Read(ref reader, "tag objects", ReadTag);
 
-		var tags = new List<string>();
-		while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
-		{
-			using var document = JsonDocument.ParseValue(ref reader);
-			var item = document.RootElement;
-
-			if (item.ValueKind != JsonValueKind.Object
-				|| !item.TryGetProperty("text", out var text)
-				|| text.ValueKind != JsonValueKind.String)
-			{
-				throw new JsonException("Expected an object with a string \"text\".");
-			}
-
-			tags.Add(text.GetString()!);
-		}
-
-		return tags;
-	}
+	private static string ReadTag(JsonElement item)
+		=> item.ValueKind == JsonValueKind.Object
+			&& item.TryGetProperty("text", out var text)
+			&& text.ValueKind == JsonValueKind.String
+				? text.GetString()!
+				: throw new JsonException("Expected an object with a string \"text\".");
 
 	/// <inheritdoc />
 	public override void Write(Utf8JsonWriter writer, IReadOnlyList<string> value, JsonSerializerOptions options)
