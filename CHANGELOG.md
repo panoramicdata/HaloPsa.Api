@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A ticket create's response is read whether Halo returns the ticket, an array of tickets or a `ticket` wrapper. Any successful create response that cannot be read, including an empty one, raises a `JsonException` saying the ticket may have been created, with its id when one can be read.
 - `User` reads from Halo's response again: an unreleased change had given it a constructor that System.Text.Json cannot bind.
 - `UpdateTicketRequest` is sent under Halo's names as the one-element array `POST /api/Tickets` takes, with the ticket's id, and only the fields that are set. The package used `PUT /api/Tickets/{id}`, which Halo does not have.
+- An error response whose body is a JSON string, such as Halo's `"Category is mandatory"`, now raises the matching `HaloApiException` with that message. The error parser threw `InvalidOperationException` instead, hiding the status and Halo's message.
 
 ### Added
 - `CreateTicketRequest.DetailsHtml` and `TargetDate`; `CustomFieldInput`; a list overload of `CreateAsync`.

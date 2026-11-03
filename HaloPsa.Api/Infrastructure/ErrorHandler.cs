@@ -49,11 +49,13 @@ internal sealed class ErrorHandler(ILogger? logger) : DelegatingHandler
 	private static HaloApiException ConvertToHaloApiException(ApiException apiException, HttpRequestMessage request)
 	{
 		var statusCode = (int)apiException.StatusCode;
-		var message = apiException.ReasonPhrase ?? $"API request failed with status {statusCode}";
 		var requestUrl = request.RequestUri?.ToString();
 		var requestMethod = request.Method.Method;
 
 		var (details, validationErrors) = ApiErrorParser.ParseJsonContent(apiException.Content);
+		var message = ApiErrorParser.ReadStringBodyMessage(apiException.Content)
+			?? apiException.ReasonPhrase
+			?? $"API request failed with status {statusCode}";
 
 		var errorContext = new HaloApiErrorContext
 		{
