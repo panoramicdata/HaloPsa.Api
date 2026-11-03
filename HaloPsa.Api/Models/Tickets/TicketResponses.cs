@@ -213,32 +213,22 @@ internal static class TicketResponseReader
 	// "success" and "messages" are read only from a wrapper: a bare ticket is the ticket's own fields.
 	private static TicketResponseContent ReadObject(JsonElement root, JsonSerializerOptions options, Func<string, string> unreadableMessage)
 	{
-		JsonElement? ticket = null;
-		bool? success = null;
-		IReadOnlyList<string>? messages = null;
+		var wrapped = ValuesNamed(root, "ticket").Where(value => value.ValueKind == JsonValueKind.Object).Select(value => (JsonElement?)value).FirstOrDefault();
 
-		foreach (var property in root.EnumerateObject())
+		if (wrapped is null)
 		{
-			var value = property.Value;
-
-			if (IsNamed(property, "ticket") && value.ValueKind == JsonValueKind.Object)
-			{
-				ticket ??= value;
-			}
-			else if (IsNamed(property, "success") && ReadBoolean(value) is { } flag)
-			{
-				success ??= flag;
-			}
-			else if (IsNamed(property, "messages"))
-			{
-				messages ??= ReadMessages(value);
-			}
+			return new TicketResponseContent([ReadTicket(root, options, unreadableMessage)], Success: true, Messages: null);
 		}
 
-		return ticket is { } wrapped
-			? new TicketResponseContent([ReadTicket(wrapped, options, unreadableMessage)], success ?? true, messages)
-			: new TicketResponseContent([ReadTicket(root, options, unreadableMessage)], Success: true, Messages: null);
+		// The first value under each name that reads wins, so an unreadable "success" or "messages" cannot hide a later one.
+		var success = ValuesNamed(root, "success").Select(ReadBoolean).FirstOrDefault(flag => flag is not null) ?? true;
+		var messages = ValuesNamed(root, "messages").Select(ReadMessages).FirstOrDefault(list => list is not null);
+
+		return new TicketResponseContent([ReadTicket(wrapped.Value, options, unreadableMessage)], success, messages);
 	}
+
+	private static IEnumerable<JsonElement> ValuesNamed(JsonElement root, string name)
+		=> root.EnumerateObject().Where(property => IsNamed(property, name)).Select(property => property.Value);
 
 	// Writes the wrapper shape Read accepts, so Success and Messages survive a round trip; messages whenever not null.
 	internal static void Write(Utf8JsonWriter writer, Ticket ticket, bool success, IReadOnlyList<string>? messages, JsonSerializerOptions options)
