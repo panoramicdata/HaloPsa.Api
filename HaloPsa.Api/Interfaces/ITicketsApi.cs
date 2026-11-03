@@ -104,4 +104,17 @@ public interface ITicketsApi
 	Task DeleteAsync(
 		int id,
 		CancellationToken cancellationToken);
+
+	/// <summary>
+	/// Delete a ticket, recording why
+	/// </summary>
+	/// <param name="id">The ticket ID to delete</param>
+	/// <param name="reason">The reason for the deletion, sent as Halo's <c>reason</c> parameter</param>
+	/// <param name="cancellationToken">Cancellation token</param>
+	/// <returns>A task representing the delete operation</returns>
+	[Delete("/api/Tickets/{id}")]
+	Task DeleteAsync(
+		int id,
+		[Query][AliasAs("reason")] string reason,
+		CancellationToken cancellationToken);
 }

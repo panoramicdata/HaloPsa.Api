@@ -104,6 +104,18 @@ public class TicketsApiWrapperReadOnlyTests
 		await act.Should().ThrowAsync<InvalidOperationException>();
 	}
 
+	// An id of 0 and a blank reason would each fail validation, so a read-only refusal proves it comes first.
+	[Fact]
+	public async Task DeleteAsync_WithAReason_WhenReadOnly_RefusesWithoutCallingTheApi()
+	{
+		var wrapper = new TicketsApiWrapper(new ThrowingTicketsApi(), readOnly: true);
+
+		var act = async () => await wrapper.DeleteAsync(0, " ", TestContext.Current.CancellationToken);
+
+		(await act.Should().ThrowAsync<InvalidOperationException>())
+			.WithMessage("*read-only*DeleteAsync*");
+	}
+
 	// A status, agent or team id of 0 and a blank note would each fail validation, so a read-only refusal in the next five proves it comes first.
 	[Fact]
 	public async Task CloseAsync_WhenReadOnly_RefusesWithoutCallingTheApi()
@@ -210,6 +222,9 @@ public class TicketsApiWrapperReadOnlyTests
 
 		public Task DeleteAsync(int id, CancellationToken cancellationToken)
 			=> ThrowIfReached<Task>(id, cancellationToken);
+
+		public Task DeleteAsync(int id, string reason, CancellationToken cancellationToken)
+			=> ThrowIfReached<Task>(id, reason, cancellationToken);
 
 		private static T ThrowIfReached<T>(params object?[] arguments)
 		{

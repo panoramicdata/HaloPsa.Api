@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `User.Login`, `FirstName`, `Surname`, `EmailAddress2`, `EmailAddress3` and `LinkedAgentId`; `UserFilter` (`search`, `client_id`, `includeinactive`, `exclude_agents`, `pageinate`, `page_size`, `page_no`) with `UsersApiWrapper.GetResponseAsync(UserFilter?)` and `GetAllAsync(UserFilter?)`.
 - `HaloClientOptions.UserAgent`: the User-Agent sent with every request, the token request included. Null or blank keeps `Halo.Api/.NET`; a value that is not a valid User-Agent header throws an `ArgumentException` naming `UserAgent` when the client is created.
 - `UpdateTicketRequest.ClosureNote` (`closure_note`); `UpdateTicketResponse.Tickets`.
+- `DeleteAsync(id, reason)`, sending Halo's `reason` parameter.
 
 ### Changed
 - `CreateTicketRequest.CustomFields` is now `IReadOnlyList<CustomFieldInput>`, sent as `customfields: [{"id":...,"value":...}]`. Replace a dictionary keyed by field id with one `CustomFieldInput` per field.
@@ -36,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `UpdateTicketRequest.CustomFields` is now `IReadOnlyList<CustomFieldInput>`; `SuppressEmails`, `Notes`, `CloseTicket` and `Resolution` are obsolete and never sent.
 - `ITicketsApi.UpdateAsync(int, UpdateTicketRequest)` (`PUT /api/Tickets/{id}`) is replaced by `UpdateAsync(IReadOnlyList<UpdateTicketRequest>)` on `POST /api/Tickets`; `TicketsApiWrapper.UpdateAsync(id, request)` keeps its signature. An update refuses an id that is not positive, and an update response that cannot be read raises a `JsonException` saying the update may have been applied.
 - `CloseAsync`, `ReopenAsync` and `AssignAsync` now update the ticket through `POST /api/Tickets`; the package called `/api/Tickets/{id}/close`, `/reopen` and `/assign`, which Halo does not have. Close and reopen take the status id to set, because Halo's status ids differ per instance (read them from `Psa.Statuses`): use `CloseAsync(id, closedStatusId)`, `CloseAsync(id, closedStatusId, closureNote)` and `ReopenAsync(id, openStatusId)`. The overloads without a status id, and the close, reopen and assign members of `ITicketsApi`, are removed.
+- `DeleteAsync` refuses an id that is not positive before sending anything.
 
 ### Fixed (#72)
 - `TicketFilter` is now sent under Halo's parameter names (`client_id`, `requesttype_id`, `open_only`, `pageinate`, `page_size`, `mine`, `lastupdatefromdate` and others). Before this, Halo silently ignored most filters and returned unfiltered results.

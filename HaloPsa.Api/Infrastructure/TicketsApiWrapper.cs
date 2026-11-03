@@ -202,8 +202,23 @@ public class TicketsApiWrapper(ITicketsApi ticketsApi, bool? readOnly = null) : 
 	public Task DeleteAsync(int id, CancellationToken cancellationToken)
 	{
 		ThrowIfReadOnly(nameof(DeleteAsync));
+		ThrowIfNotATicketId(id, nameof(id));
 
 		return ticketsApi.DeleteAsync(id, cancellationToken);
+	}
+
+	/// <inheritdoc />
+	public Task DeleteAsync(int id, string reason, CancellationToken cancellationToken)
+	{
+		ThrowIfReadOnly(nameof(DeleteAsync));
+		ThrowIfNotATicketId(id, nameof(id));
+
+		if (string.IsNullOrWhiteSpace(reason))
+		{
+			throw new ArgumentException("The reason must not be blank; no request was sent.", nameof(reason));
+		}
+
+		return ticketsApi.DeleteAsync(id, reason, cancellationToken);
 	}
 
 	/// <summary>
