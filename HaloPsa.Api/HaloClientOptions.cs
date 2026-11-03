@@ -63,6 +63,15 @@ public class HaloClientOptions
 	public IReadOnlyDictionary<string, string> DefaultHeaders { get; init; } = new Dictionary<string, string>();
 
 	/// <summary>
+	/// The User-Agent sent with every request, the token request included. Null or blank sends Halo.Api/.NET.
+	/// </summary>
+	public string? UserAgent { get; init; }
+
+	internal const string DefaultUserAgent = "Halo.Api/.NET";
+
+	internal string EffectiveUserAgent => string.IsNullOrWhiteSpace(UserAgent) ? DefaultUserAgent : UserAgent;
+
+	/// <summary>
 	/// Gets or sets whether to use exponential back-off for retries. Default is true
 	/// </summary>
 	public bool UseExponentialBackoff { get; init; } = true;

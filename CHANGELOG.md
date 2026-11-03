@@ -19,12 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ClientFilter` (`includeinactive`, `include_custom_fields`, `pageinate`, `page_size`, `page_no`, `search`, `exclude_internal`, `count`), `ClientsApiWrapper.GetResponseAsync(ClientFilter?)`, `GetAllPagedAsync`, which pages to the end with the same checks as the site read, and `GetByIdAsync(id, includeDetails)`.
 - `Client.CustomFields`.
 - `User.Login`, `FirstName`, `Surname`, `EmailAddress2`, `EmailAddress3` and `LinkedAgentId`; `UserFilter` (`search`, `client_id`, `includeinactive`, `exclude_agents`, `pageinate`, `page_size`, `page_no`) with `UsersApiWrapper.GetResponseAsync(UserFilter?)` and `GetAllAsync(UserFilter?)`.
+- `HaloClientOptions.UserAgent`: the User-Agent sent with every request, the token request included. Null or blank keeps `Halo.Api/.NET`.
 
 ### Changed
 - `CreateTicketRequest.CustomFields` is now `IReadOnlyList<CustomFieldInput>`, sent as `customfields: [{"id":...,"value":...}]`. Replace a dictionary keyed by field id with one `CustomFieldInput` per field.
 - `CreateTicketRequest.SuppressEmails` and `Notes` are obsolete and never sent: Halo's ticket create has no such fields.
 - `TicketsApiWrapper.CreateAsync` refuses a `ClientId` or `UserId` that is not positive, and a `SiteId` that is set but not positive, before sending anything. Halo rejects 0, and -1 is its 'not set' value.
 - `User.Username` is obsolete and returns `Login`: Halo's Users record has no `username` field, so it was never filled.
+- The token request now sends the same User-Agent as API requests; it previously sent none.
 
 ### Fixed (#72)
 - `TicketFilter` is now sent under Halo's parameter names (`client_id`, `requesttype_id`, `open_only`, `pageinate`, `page_size`, `mine`, `lastupdatefromdate` and others). Before this, Halo silently ignored most filters and returned unfiltered results.
