@@ -87,7 +87,17 @@ internal static class ApiErrorParser
 			return null;
 		}
 
-		var text = root.GetString()?.Trim();
+		string? text;
+		try
+		{
+			text = root.GetString()?.Trim();
+		}
+		catch (InvalidOperationException)
+		{
+			// GetString throws for an escape that is not valid UTF-16, such as an unpaired surrogate.
+			return null;
+		}
+
 		return string.IsNullOrEmpty(text) ? null : text;
 	}
 

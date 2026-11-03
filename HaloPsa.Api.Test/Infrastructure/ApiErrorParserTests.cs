@@ -44,6 +44,19 @@ public class ApiErrorParserTests
 	}
 
 	[Fact]
+	public async Task CreateAsync_WhenHaloAnswers400WithAStringBodyThatCannotBeDecoded_RaisesTheBadRequestError()
+	{
+		var handler = new CapturingHandler("\"\\ud800\"") { StatusCode = HttpStatusCode.BadRequest };
+		var psa = new PsaApi(handler.CreateClient(), readOnly: false);
+
+		var act = async () => await psa.Tickets.CreateAsync(_validRequest, CancellationToken.None);
+
+		var thrown = (await act.Should().ThrowExactlyAsync<HaloBadRequestException>()).WithMessage("Bad request: Bad Request").Which;
+		_ = thrown.StatusCode.Should().Be(400);
+		_ = thrown.Details.Should().ContainKey("rawContent");
+	}
+
+	[Fact]
 	public async Task CreateAsync_WhenHaloAnswers500WithAnArrayBody_RaisesTheServerError()
 	{
 		var handler = new CapturingHandler("[]") { StatusCode = HttpStatusCode.InternalServerError };
@@ -93,6 +106,7 @@ public class ApiErrorParserTests
 	[InlineData("42")]
 	[InlineData("true")]
 	[InlineData("null")]
+	[InlineData("\"\\ud800\"")]
 	public void ParseJsonContent_WhenTheRootIsNotAnObject_DoesNotThrow(string body)
 	{
 		var act = () => ApiErrorParser.ParseJsonContent(body);
