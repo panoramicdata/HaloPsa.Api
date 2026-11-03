@@ -182,7 +182,7 @@ public class TicketModelTests
 	{
 		// Arrange
 		var now = DateTime.UtcNow;
-		var customFields = new Dictionary<string, object?> { ["Field1"] = "Value1" };
+		IReadOnlyList<CustomFieldInput> customFields = [new CustomFieldInput { Id = 1, Value = "Value1" }];
 		var assetIds = new List<int> { 1, 2 }.AsReadOnly();
 		var tags = new List<string> { "tag1", "tag2" }.AsReadOnly();
 
@@ -205,8 +205,10 @@ public class TicketModelTests
 			CustomFields = customFields,
 			AssetIds = assetIds,
 			Tags = tags,
+#pragma warning disable CS0618 // obsolete members stay settable
 			SuppressEmails = true,
 			Notes = "Initial notes"
+#pragma warning restore CS0618
 		};
 
 		// Assert
@@ -226,8 +228,10 @@ public class TicketModelTests
 		_ = request.CustomFields.Should().BeEquivalentTo(customFields);
 		_ = request.AssetIds.Should().BeEquivalentTo(assetIds);
 		_ = request.Tags.Should().BeEquivalentTo(tags);
+#pragma warning disable CS0618 // obsolete members stay readable
 		_ = request.SuppressEmails.Should().BeTrue();
 		_ = request.Notes.Should().Be("Initial notes");
+#pragma warning restore CS0618
 	}
 
 	[Fact]

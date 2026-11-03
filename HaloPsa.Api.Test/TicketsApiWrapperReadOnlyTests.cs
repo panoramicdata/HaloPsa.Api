@@ -139,6 +139,9 @@ public class TicketsApiWrapperReadOnlyTests
 		public Task<CreateTicketResponse> CreateAsync(CreateTicketRequest request, CancellationToken cancellationToken)
 			=> ThrowIfReached<Task<CreateTicketResponse>>(request, cancellationToken);
 
+		public Task<CreateTicketResponse> CreateAsync(IReadOnlyList<CreateTicketRequest> requests, CancellationToken cancellationToken)
+			=> ThrowIfReached<Task<CreateTicketResponse>>(requests, cancellationToken);
+
 		public Task<UpdateTicketResponse> UpdateAsync(int id, UpdateTicketRequest request, CancellationToken cancellationToken)
 			=> ThrowIfReached<Task<UpdateTicketResponse>>(id, request, cancellationToken);
 

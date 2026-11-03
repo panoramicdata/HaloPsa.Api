@@ -47,12 +47,18 @@ public class TicketsApiWrapper(ITicketsApi ticketsApi, bool? readOnly = null) : 
 	public Task<Ticket> GetByIdAsync(int id, CancellationToken cancellationToken)
 		=> ticketsApi.GetByIdAsync(id, cancellationToken);
 
-	/// <inheritdoc />
+	/// <summary>
+	/// Creates a ticket, sent as the one-element array Halo's POST /api/Tickets takes
+	/// </summary>
 	public Task<CreateTicketResponse> CreateAsync(CreateTicketRequest request, CancellationToken cancellationToken)
+		=> CreateAsync([request], cancellationToken);
+
+	/// <inheritdoc />
+	public Task<CreateTicketResponse> CreateAsync(IReadOnlyList<CreateTicketRequest> requests, CancellationToken cancellationToken)
 	{
 		ThrowIfReadOnly(nameof(CreateAsync));
 
-		return ticketsApi.CreateAsync(request, cancellationToken);
+		return ticketsApi.CreateAsync(requests, cancellationToken);
 	}
 
 	/// <inheritdoc />

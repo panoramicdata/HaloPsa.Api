@@ -57,9 +57,21 @@ public interface ITicketsApi
 	/// <param name="request">The ticket creation request</param>
 	/// <param name="cancellationToken">Cancellation token</param>
 	/// <returns>The newly created ticket</returns>
+	[Obsolete("Halo's POST /api/Tickets takes an array; use the list overload, or TicketsApiWrapper.CreateAsync, which sends one ticket as an array.")]
 	[Post("/api/Tickets")]
 	Task<CreateTicketResponse> CreateAsync(
 		[Body] CreateTicketRequest request,
+		CancellationToken cancellationToken);
+
+	/// <summary>
+	/// Create tickets, sent as the array Halo's POST /api/Tickets takes
+	/// </summary>
+	/// <param name="requests">The ticket creation requests</param>
+	/// <param name="cancellationToken">Cancellation token</param>
+	/// <returns>The newly created ticket</returns>
+	[Post("/api/Tickets")]
+	Task<CreateTicketResponse> CreateAsync(
+		[Body] IReadOnlyList<CreateTicketRequest> requests,
 		CancellationToken cancellationToken);
 
 	/// <summary>

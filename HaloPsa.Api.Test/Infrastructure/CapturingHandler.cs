@@ -48,6 +48,16 @@ internal sealed class CapturingHandler : HttpMessageHandler
 	public Uri LastRequest => Requests[^1];
 
 	/// <summary>
+	/// The HTTP method of every request seen so far, in order
+	/// </summary>
+	public List<HttpMethod> Methods { get; } = [];
+
+	/// <summary>
+	/// The body of every request seen so far, in order; <see langword="null"/> for a request with no content
+	/// </summary>
+	public List<string?> RequestBodies { get; } = [];
+
+	/// <summary>
 	/// Creates a handler that answers every request with the same JSON
 	/// </summary>
 	public static CapturingHandler Returning(string json) => new(json);
@@ -57,15 +67,17 @@ internal sealed class CapturingHandler : HttpMessageHandler
 	/// </summary>
 	public static NameValueCollection ParseQuery(Uri uri) => HttpUtility.ParseQueryString(uri.Query);
 
-	protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+	protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
 	{
 		RequestUri = request.RequestUri;
 		Requests.Add(request.RequestUri!);
+		Methods.Add(request.Method);
+		RequestBodies.Add(request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
 
-		return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+		return new HttpResponseMessage(HttpStatusCode.OK)
 		{
 			Content = new StringContent(_respond(request), Encoding.UTF8, "application/json")
-		});
+		};
 	}
 
 	public HttpClient CreateClient() => new(this) { BaseAddress = new Uri("https://sandbox.halopsa.com") };

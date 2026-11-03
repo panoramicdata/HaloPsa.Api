@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `CreateTicketRequest` is now sent under Halo's names (`client_id`, `site_id`, `user_id`, `status_id`, `priority_id`, `team_id`, `categoryid_1`, `tickettype_id`, `dateoccurred` and others), as the one-element array `POST /api/Tickets` takes. Before this Halo did not bind the client, site, user, custom fields or assets of a created ticket.
+- Asset ids are sent as `assets: [{"id":...}]` and tags as `tags: [{"text":...}]`; unset fields are no longer sent.
+
+### Added
+- `CreateTicketRequest.DetailsHtml` and `TargetDate`; `CustomFieldInput`; a list overload of `CreateAsync`.
+
+### Changed
+- `CreateTicketRequest.CustomFields` is now `IReadOnlyList<CustomFieldInput>`, sent as `customfields: [{"id":...,"value":...}]`. Replace a dictionary keyed by field id with one `CustomFieldInput` per field.
+- `CreateTicketRequest.SuppressEmails` and `Notes` are obsolete and never sent: Halo's ticket create has no such fields.
+
 ### Fixed (#72)
 - `TicketFilter` is now sent under Halo's parameter names (`client_id`, `requesttype_id`, `open_only`, `pageinate`, `page_size`, `mine`, `lastupdatefromdate` and others). Before this, Halo silently ignored most filters and returned unfiltered results.
 - `StartDate`/`EndDate` are sent with `datesearch` (defaulting to the opened date) in `yyyy-MM-ddTHH:mm:ss` format.
