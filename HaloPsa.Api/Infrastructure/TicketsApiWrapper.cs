@@ -51,6 +51,10 @@ public class TicketsApiWrapper(ITicketsApi ticketsApi, bool? readOnly = null) : 
 	/// <summary>
 	/// Creates a ticket, sent as the one-element array Halo's POST /api/Tickets takes
 	/// </summary>
+	/// <exception cref="JsonException">
+	/// Halo answered success but the response could not be read; the ticket may have been created, so do not retry.
+	/// The message names the ticket id when one could be read.
+	/// </exception>
 	public Task<CreateTicketResponse> CreateAsync(CreateTicketRequest request, CancellationToken cancellationToken)
 		=> CreateAsync([request], cancellationToken);
 
@@ -73,17 +77,21 @@ public class TicketsApiWrapper(ITicketsApi ticketsApi, bool? readOnly = null) : 
 		return SendCreateAsync(requests, cancellationToken);
 	}
 
-	// Refit wraps a failed deserialisation in an ApiException, which a caller would treat as an HTTP failure and retry into a duplicate ticket.
+	// An unreadable 2xx body arrives as an ApiException, which a caller would treat as an HTTP failure and retry into a duplicate ticket.
 	private async Task<CreateTicketResponse> SendCreateAsync(IReadOnlyList<CreateTicketRequest> requests, CancellationToken cancellationToken)
 	{
 		try
 		{
-			return await ticketsApi.CreateAsync(requests, cancellationToken).ConfigureAwait(false);
+			return await ticketsApi.CreateAsync(requests, cancellationToken).ConfigureAwait(false)
+				?? throw new JsonException(CreateTicketResponseConverter.UnreadableMessage("unknown"));
 		}
-		catch (Exception ex) when (ex.InnerException is JsonException inner
-			&& inner.Message.Contains(CreateTicketResponseConverter.MayHaveBeenCreated, StringComparison.Ordinal))
+		catch (Exception ex) when (ex.InnerException is JsonException inner)
 		{
-			throw new JsonException(inner.Message, ex);
+			var message = inner.Message.Contains(CreateTicketResponseConverter.MayHaveBeenCreated, StringComparison.Ordinal)
+				? inner.Message
+				: CreateTicketResponseConverter.UnreadableMessage("unknown");
+
+			throw new JsonException(message, ex);
 		}
 	}
 

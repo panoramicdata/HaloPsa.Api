@@ -24,7 +24,7 @@ public interface IUsersApi
     Task<UsersResponse> GetResponseAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    /// Get users matching a filter - Convenience method that returns unwrapped array
+    /// Get one page of users matching a filter - Convenience method that returns unwrapped array; set <see cref="UserFilter.Paginate"/> and <see cref="UserFilter.PageNo"/> to read further pages
     /// </summary>
     Task<IReadOnlyList<User>> GetAllAsync(UserFilter? filter, CancellationToken cancellationToken);
 

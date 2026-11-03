@@ -1,5 +1,6 @@
 using HaloPsa.Api.Models.Tickets;
 using Refit;
+using System.Text.Json;
 
 namespace HaloPsa.Api.Interfaces;
 
@@ -69,6 +70,10 @@ public interface ITicketsApi
 	/// <param name="requests">The ticket creation requests</param>
 	/// <param name="cancellationToken">Cancellation token</param>
 	/// <returns>The response: <see cref="CreateTicketResponse.Tickets"/> holds every ticket Halo returned, and <see cref="CreateTicketResponse.Ticket"/> (and <see cref="CreateTicketResponse.TicketId"/>) is the first</returns>
+	/// <exception cref="JsonException">
+	/// Halo answered success but the response could not be read; the ticket may have been created, so do not retry.
+	/// The message names the ticket id when one could be read.
+	/// </exception>
 	[Post("/api/Tickets")]
 	Task<CreateTicketResponse> CreateAsync(
 		[Body] IReadOnlyList<CreateTicketRequest> requests,

@@ -114,23 +114,23 @@ var newTicket = new CreateTicketRequest
 };
 
 var createdTicket = await client.Psa.Tickets.CreateAsync(newTicket, cancellationToken);
-Console.WriteLine($"Created ticket #{createdTicket.Id}");
+Console.WriteLine($"Created ticket #{createdTicket.TicketId}");
 ```
 
 #### Working with Users
 
 ```csharp
-// Search for users
+// Search for users (one page; set Paginate and PageNo to read further pages)
 var userFilter = new UserFilter
 {
     Search = "john.doe",
-    IncludeActive = true
+    IncludeInactive = false
 };
 
 var users = await client.Psa.Users.GetAllAsync(userFilter, cancellationToken);
 
 // Get user details
-var user = await client.Psa.Users.GetByIdAsync(123, includeDetails: true, cancellationToken);
+var user = await client.Psa.Users.GetByIdAsync(123, cancellationToken);
 Console.WriteLine($"User: {user.Name} ({user.EmailAddress})");
 
 // Create a new user
@@ -148,14 +148,14 @@ var createdUser = await client.Psa.Users.CreateAsync(newUser, cancellationToken)
 #### Working with Clients
 
 ```csharp
-// Get all active clients
+// Get every active client, paging to the end
 var clientFilter = new ClientFilter
 {
-    IncludeActive = true,
-    Count = 100
+    IncludeInactive = false,
+    PageSize = 100
 };
 
-var clients = await client.Psa.Clients.GetAllAsync(clientFilter, cancellationToken);
+var clients = await client.Psa.Clients.GetAllPagedAsync(clientFilter, cancellationToken);
 
 // Get client with additional details
 var clientDetails = await client.Psa.Clients.GetByIdAsync(123, includeDetails: true, cancellationToken);

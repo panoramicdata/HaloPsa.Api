@@ -151,6 +151,7 @@ public class HaloClientOptions
 	{
 		ValidateRequiredFields();
 		ValidateFormats();
+		ValidateUserAgent();
 		ValidateTimings();
 	}
 
@@ -197,6 +198,21 @@ public class HaloClientOptions
 	private static bool IsAbsoluteHttpUrl(string value)
 		=> Uri.TryCreate(value, UriKind.Absolute, out var uri)
 			&& (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp);
+
+	private void ValidateUserAgent()
+	{
+		if (string.IsNullOrWhiteSpace(UserAgent))
+		{
+			return;
+		}
+
+		using var probe = new HttpRequestMessage();
+
+		if (!probe.Headers.UserAgent.TryParseAdd(UserAgent))
+		{
+			throw new ArgumentException($"UserAgent is not a valid User-Agent header value, for example ExampleProduct/1.0. Got: {UserAgent}", nameof(UserAgent));
+		}
+	}
 
 	private void ValidateTimings()
 	{

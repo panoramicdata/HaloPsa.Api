@@ -1,9 +1,11 @@
 using AwesomeAssertions;
+using HaloPsa.Api.Exceptions;
 using HaloPsa.Api.Infrastructure;
 using HaloPsa.Api.Interfaces;
 using HaloPsa.Api.Models.Tickets;
 using HaloPsa.Api.Test.Infrastructure;
 using Refit;
+using System.Net;
 using System.Text.Json;
 
 namespace HaloPsa.Api.Test.Models.Tickets;
@@ -88,5 +90,45 @@ public class CreateTicketResponseTests
 
 		var thrown = (await act.Should().ThrowAsync<JsonException>()).WithMessage("*may have been created*903*").Which;
 		_ = thrown.InnerException.Should().BeOfType<ApiException>();
+	}
+
+	[Theory]
+	[InlineData("")]
+	[InlineData("null")]
+	[InlineData("<html><body>Gateway page</body></html>")]
+	[InlineData("42")]
+	[InlineData("[]")]
+	public async Task CreateAsync_WhenHaloAnswersOkWithABodyThatCannotBeRead_ThrowsAnErrorSayingTheTicketMayHaveBeenCreated(string body)
+	{
+		var handler = new CapturingHandler(body);
+		var psa = new PsaApi(handler.CreateClient(), readOnly: false);
+
+		var act = async () => await psa.Tickets.CreateAsync(new CreateTicketRequest { Summary = "S", ClientId = 21, UserId = 9 }, CancellationToken.None);
+
+		_ = (await act.Should().ThrowAsync<JsonException>()).WithMessage("*may have been created*id unknown*");
+	}
+
+	[Fact]
+	public async Task CreateAsync_WhenHaloAnswersWithAnHttpError_ThrowsTheHaloApiException()
+	{
+		var handler = new CapturingHandler("""{"message":"Something went wrong"}""") { StatusCode = HttpStatusCode.InternalServerError };
+		var psa = new PsaApi(handler.CreateClient(), readOnly: false);
+
+		var act = async () => await psa.Tickets.CreateAsync(new CreateTicketRequest { Summary = "S", ClientId = 21, UserId = 9 }, CancellationToken.None);
+
+		_ = await act.Should().ThrowExactlyAsync<HaloServerException>();
+	}
+
+	[Fact]
+	public async Task CreateAsync_WhenCancelled_ThrowsTheCancellation()
+	{
+		var handler = new CapturingHandler(T901);
+		var psa = new PsaApi(handler.CreateClient(), readOnly: false);
+		using var cancellation = new CancellationTokenSource();
+		await cancellation.CancelAsync();
+
+		var act = async () => await psa.Tickets.CreateAsync(new CreateTicketRequest { Summary = "S", ClientId = 21, UserId = 9 }, cancellation.Token);
+
+		_ = await act.Should().ThrowAsync<OperationCanceledException>();
 	}
 }

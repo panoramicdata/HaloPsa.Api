@@ -21,7 +21,7 @@ public record ClientFilter
 	/// Whether to use pagination
 	/// </summary>
 	/// <remarks>
-	/// Without pagination Halo silently returns at most 50 clients, however many exist.
+	/// Without pagination Halo caps the list it returns, however many clients exist.
 	/// Halo spells the parameter <c>pageinate</c>.
 	/// </remarks>
 	[AliasAs("pageinate")]

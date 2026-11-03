@@ -28,6 +28,11 @@ internal sealed class CapturingHandler : HttpMessageHandler
 		=> _respond = respond;
 
 	/// <summary>
+	/// The status code every response carries; 200 OK unless a test sets it
+	/// </summary>
+	public HttpStatusCode StatusCode { get; init; } = HttpStatusCode.OK;
+
+	/// <summary>
 	/// The most recent request URI
 	/// </summary>
 	public Uri? RequestUri { get; private set; }
@@ -74,7 +79,7 @@ internal sealed class CapturingHandler : HttpMessageHandler
 		Methods.Add(request.Method);
 		RequestBodies.Add(request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
 
-		return new HttpResponseMessage(HttpStatusCode.OK)
+		return new HttpResponseMessage(StatusCode)
 		{
 			Content = new StringContent(_respond(request), Encoding.UTF8, "application/json")
 		};

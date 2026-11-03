@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - `CreateTicketRequest` is now sent under Halo's names (`client_id`, `site_id`, `user_id`, `status_id`, `priority_id`, `team_id`, `categoryid_1`, `tickettype_id`, `dateoccurred` and others), as the one-element array `POST /api/Tickets` takes. Before this Halo did not bind the client, site, user, custom fields or assets of a created ticket.
 - Asset ids are sent as `assets: [{"id":...}]` and tags as `tags: [{"text":...}]`; unset fields are no longer sent.
-- A ticket create's response is read whether Halo returns the ticket, an array of tickets or a `ticket` wrapper. A response that cannot be read says the ticket may have been created and gives its id.
+- A ticket create's response is read whether Halo returns the ticket, an array of tickets or a `ticket` wrapper. Any successful create response that cannot be read, including an empty one, raises a `JsonException` saying the ticket may have been created, with its id when one can be read.
 - `User` reads from Halo's response again: an unreleased change had given it a constructor that System.Text.Json cannot bind.
 
 ### Added
@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ClientFilter` (`includeinactive`, `include_custom_fields`, `pageinate`, `page_size`, `page_no`, `search`, `exclude_internal`, `count`), `ClientsApiWrapper.GetResponseAsync(ClientFilter?)`, `GetAllPagedAsync`, which pages to the end with the same checks as the site read, and `GetByIdAsync(id, includeDetails)`.
 - `Client.CustomFields`.
 - `User.Login`, `FirstName`, `Surname`, `EmailAddress2`, `EmailAddress3` and `LinkedAgentId`; `UserFilter` (`search`, `client_id`, `includeinactive`, `exclude_agents`, `pageinate`, `page_size`, `page_no`) with `UsersApiWrapper.GetResponseAsync(UserFilter?)` and `GetAllAsync(UserFilter?)`.
-- `HaloClientOptions.UserAgent`: the User-Agent sent with every request, the token request included. Null or blank keeps `Halo.Api/.NET`.
+- `HaloClientOptions.UserAgent`: the User-Agent sent with every request, the token request included. Null or blank keeps `Halo.Api/.NET`; a value that is not a valid User-Agent header throws an `ArgumentException` naming `UserAgent` when the client is created.
 
 ### Changed
 - `CreateTicketRequest.CustomFields` is now `IReadOnlyList<CustomFieldInput>`, sent as `customfields: [{"id":...,"value":...}]`. Replace a dictionary keyed by field id with one `CustomFieldInput` per field.
@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `TicketsApiWrapper.CreateAsync` refuses a `ClientId` or `UserId` that is not positive, and a `SiteId` that is set but not positive, before sending anything. Halo rejects 0, and -1 is its 'not set' value.
 - `User.Username` is obsolete and returns `Login`: Halo's Users record has no `username` field, so it was never filled.
 - The token request now sends the same User-Agent as API requests; it previously sent none.
+- `ITicketsApi`, `IClientsApi` and `IUsersApi` gained members, which breaks a type outside the package that implements them.
+- `ITicketsApi.CreateAsync(CreateTicketRequest, ...)` is obsolete: Halo's `POST /api/Tickets` takes an array. Use the list overload, or `Psa.Tickets.CreateAsync`, which sends one ticket as an array.
+- `User.Username` is read-only (obsolete, returns `Login`), so an object initialiser or `with` expression that sets it no longer compiles.
+- A ticket create whose response cannot be read throws `JsonException` instead of Refit's `ApiException`, so a `catch (ApiException)` around `CreateAsync` no longer catches it.
 
 ### Fixed (#72)
 - `TicketFilter` is now sent under Halo's parameter names (`client_id`, `requesttype_id`, `open_only`, `pageinate`, `page_size`, `mine`, `lastupdatefromdate` and others). Before this, Halo silently ignored most filters and returned unfiltered results.

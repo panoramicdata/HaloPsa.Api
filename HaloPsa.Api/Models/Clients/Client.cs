@@ -48,7 +48,7 @@ public record Client
 	/// The custom field values on this client
 	/// </summary>
 	/// <remarks>
-	/// Halo only returns custom fields that were asked for, via <see cref="ClientFilter.IncludeCustomFields"/>.
+	/// A list read returns only the custom fields asked for with <see cref="ClientFilter.IncludeCustomFields"/>; a read by id returns them when <c>includeDetails</c> is true.
 	/// </remarks>
 	[JsonPropertyName("customfields")]
 	public IReadOnlyList<CustomFieldValue>? CustomFields { get; init; }

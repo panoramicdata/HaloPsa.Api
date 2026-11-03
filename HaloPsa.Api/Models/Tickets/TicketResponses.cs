@@ -111,6 +111,9 @@ internal sealed class CreateTicketResponseConverter : JsonConverter<CreateTicket
 	// TicketsApiWrapper matches on this phrase to tell this error from any other deserialisation failure.
 	internal const string MayHaveBeenCreated = "the ticket may have been created";
 
+	internal static string UnreadableMessage(string id)
+		=> $"Halo's ticket create response could not be read as a ticket, but {MayHaveBeenCreated} (id {id}).";
+
 	public override CreateTicketResponse Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
 	{
 		using var document = JsonDocument.ParseValue(ref reader);
@@ -167,7 +170,7 @@ internal sealed class CreateTicketResponseConverter : JsonConverter<CreateTicket
 				? idElement.GetRawText()
 				: "unknown";
 
-			throw new JsonException($"Halo's ticket create response could not be read as a ticket, but {MayHaveBeenCreated} (id {id}).", ex);
+			throw new JsonException(UnreadableMessage(id), ex);
 		}
 	}
 }

@@ -60,6 +60,14 @@ public class UserAgentTests
 		_ = tokenRequest.UserAgent.Should().Be("Halo.Api/.NET");
 	}
 
+	[Fact]
+	public void Construction_WhenTheUserAgentIsNotAValidHeaderValue_ThrowsAnErrorNamingUserAgent()
+	{
+		var act = () => new HaloClient(CreateOptions("Example, Ltd"));
+
+		_ = act.Should().Throw<ArgumentException>().WithMessage("*UserAgent*");
+	}
+
 	private static HaloClientOptions CreateOptions(string? userAgent) => new()
 	{
 		Account = "testaccount",
