@@ -57,8 +57,40 @@ public class TicketsApiWrapper(ITicketsApi ticketsApi, bool? readOnly = null) : 
 	public Task<CreateTicketResponse> CreateAsync(IReadOnlyList<CreateTicketRequest> requests, CancellationToken cancellationToken)
 	{
 		ThrowIfReadOnly(nameof(CreateAsync));
+		ArgumentNullException.ThrowIfNull(requests);
+
+		if (requests.Count == 0)
+		{
+			throw new ArgumentException("At least one ticket is required; no request was sent.", nameof(requests));
+		}
+
+		foreach (var request in requests)
+		{
+			ValidateForCreate(request);
+		}
 
 		return ticketsApi.CreateAsync(requests, cancellationToken);
+	}
+
+	// Halo rejects an id of 0 and uses -1 for "not set", so neither may reach it as a client, user or site.
+	internal static void ValidateForCreate(CreateTicketRequest request)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+
+		if (request.ClientId <= 0)
+		{
+			throw new ArgumentOutOfRangeException(nameof(request), $"ClientId must be a positive Halo client id (was {request.ClientId}); no request was sent.");
+		}
+
+		if (request.UserId <= 0)
+		{
+			throw new ArgumentOutOfRangeException(nameof(request), $"UserId must be a positive Halo user id (was {request.UserId}); no request was sent.");
+		}
+
+		if (request.SiteId is <= 0)
+		{
+			throw new ArgumentOutOfRangeException(nameof(request), $"SiteId must be a positive Halo site id (was {request.SiteId}); no request was sent.");
+		}
 	}
 
 	/// <inheritdoc />

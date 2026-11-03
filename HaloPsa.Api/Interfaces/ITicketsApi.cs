@@ -68,7 +68,7 @@ public interface ITicketsApi
 	/// </summary>
 	/// <param name="requests">The ticket creation requests</param>
 	/// <param name="cancellationToken">Cancellation token</param>
-	/// <returns>The newly created ticket</returns>
+	/// <returns>The response: <see cref="CreateTicketResponse.Tickets"/> holds every ticket Halo returned, and <see cref="CreateTicketResponse.Ticket"/> (and <see cref="CreateTicketResponse.TicketId"/>) is the first</returns>
 	[Post("/api/Tickets")]
 	Task<CreateTicketResponse> CreateAsync(
 		[Body] IReadOnlyList<CreateTicketRequest> requests,

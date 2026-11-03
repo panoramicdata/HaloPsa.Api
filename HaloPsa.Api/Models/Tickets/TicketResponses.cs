@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace HaloPsa.Api.Models.Tickets;
@@ -75,12 +76,18 @@ public record TicketResponse
 /// <summary>
 /// Response for ticket creation operations
 /// </summary>
+[JsonConverter(typeof(CreateTicketResponseConverter))]
 public record CreateTicketResponse
 {
 	/// <summary>
 	/// The newly created ticket
 	/// </summary>
 	public required Ticket Ticket { get; init; }
+
+	/// <summary>
+	/// Every ticket Halo returned; <see cref="Ticket"/> is the first
+	/// </summary>
+	public IReadOnlyList<Ticket> Tickets { get; init; } = [];
 
 	/// <summary>
 	/// Whether the creation was successful
@@ -96,6 +103,70 @@ public record CreateTicketResponse
 	/// The ID of the newly created ticket
 	/// </summary>
 	public int TicketId => Ticket.Id;
+}
+
+// Halo answers a create with a bare ticket, an array of tickets or a "ticket" wrapper; the ticket exists by then.
+internal sealed class CreateTicketResponseConverter : JsonConverter<CreateTicketResponse>
+{
+	public override CreateTicketResponse Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+	{
+		using var document = JsonDocument.ParseValue(ref reader);
+		var root = document.RootElement;
+
+		List<Ticket> tickets;
+
+		switch (root.ValueKind)
+		{
+			case JsonValueKind.Array:
+				tickets = [.. root.EnumerateArray().Select(element => ReadTicket(element, options))];
+
+				if (tickets.Count == 0)
+				{
+					throw new JsonException("Halo returned an empty array for a ticket create, so no ticket id can be read.");
+				}
+
+				break;
+			case JsonValueKind.Object:
+				tickets = [ReadTicket(UnwrapTicket(root), options)];
+				break;
+			default:
+				throw new JsonException($"Expected an array or an object for {nameof(CreateTicketResponse)}, but found {root.ValueKind}.");
+		}
+
+		return new CreateTicketResponse { Ticket = tickets[0], Tickets = tickets };
+	}
+
+	public override void Write(Utf8JsonWriter writer, CreateTicketResponse value, JsonSerializerOptions options)
+		=> JsonSerializer.Serialize(writer, value.Ticket, options);
+
+	private static JsonElement UnwrapTicket(JsonElement root)
+	{
+		foreach (var property in root.EnumerateObject())
+		{
+			if (string.Equals(property.Name, "ticket", StringComparison.OrdinalIgnoreCase) && property.Value.ValueKind == JsonValueKind.Object)
+			{
+				return property.Value;
+			}
+		}
+
+		return root;
+	}
+
+	private static Ticket ReadTicket(JsonElement element, JsonSerializerOptions options)
+	{
+		try
+		{
+			return element.Deserialize<Ticket>(options) ?? throw new JsonException("Halo returned null for a ticket.");
+		}
+		catch (JsonException ex)
+		{
+			var id = element.ValueKind == JsonValueKind.Object && element.TryGetProperty("id", out var idElement)
+				? idElement.GetRawText()
+				: "unknown";
+
+			throw new JsonException($"Halo's ticket create response could not be read as a ticket, but the ticket may have been created (id {id}).", ex);
+		}
+	}
 }
 
 /// <summary>

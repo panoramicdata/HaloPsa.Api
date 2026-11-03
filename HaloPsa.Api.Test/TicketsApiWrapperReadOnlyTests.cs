@@ -24,6 +24,9 @@ public class TicketsApiWrapperReadOnlyTests
 {
 	private static readonly UpdateTicketRequest _update = new() { Notes = "note" };
 
+	// ClientId 0 would also fail validation, so a read-only refusal proves it comes first.
+	private static readonly CreateTicketRequest _invalidCreate = new() { Summary = "S", ClientId = 0, UserId = 9 };
+
 	[Fact]
 	public void IsReadOnly_WhenTrue_IsReported()
 		=> new TicketsApiWrapper(new ThrowingTicketsApi(), readOnly: true)
@@ -55,6 +58,28 @@ public class TicketsApiWrapperReadOnlyTests
 		(await act.Should().ThrowAsync<InvalidOperationException>())
 			.WithMessage("*read-only*")
 			.WithMessage("*no*request was sent*");
+	}
+
+	[Fact]
+	public async Task CreateAsync_WhenReadOnly_RefusesWithoutCallingTheApi()
+	{
+		var wrapper = new TicketsApiWrapper(new ThrowingTicketsApi(), readOnly: true);
+
+		var act = async () => await wrapper.CreateAsync(_invalidCreate, TestContext.Current.CancellationToken);
+
+		(await act.Should().ThrowAsync<InvalidOperationException>())
+			.WithMessage("*read-only*");
+	}
+
+	[Fact]
+	public async Task CreateAsync_WithAList_WhenReadOnly_RefusesWithoutCallingTheApi()
+	{
+		var wrapper = new TicketsApiWrapper(new ThrowingTicketsApi(), readOnly: true);
+
+		var act = async () => await wrapper.CreateAsync([_invalidCreate], TestContext.Current.CancellationToken);
+
+		(await act.Should().ThrowAsync<InvalidOperationException>())
+			.WithMessage("*read-only*");
 	}
 
 	[Fact]

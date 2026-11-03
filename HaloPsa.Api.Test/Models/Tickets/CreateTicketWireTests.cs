@@ -88,4 +88,65 @@ public class CreateTicketWireTests
 		_ = handler.Requests.Should().HaveCount(1);
 		_ = SentBody(handler).EnumerateArray().Select(t => t.GetProperty("summary").GetString()).Should().Equal("A", "B");
 	}
+
+	[Theory]
+	[InlineData(0)]
+	[InlineData(-1)]
+	public async Task CreateAsync_WhenClientIdIsNotPositive_RefusesBeforeSending(int id)
+	{
+		var (wrapper, handler) = Create();
+
+		var act = async () => await wrapper.CreateAsync(new CreateTicketRequest { Summary = "S", ClientId = id, UserId = 9 }, CancellationToken.None);
+
+		_ = (await act.Should().ThrowAsync<ArgumentOutOfRangeException>()).WithMessage("*ClientId*");
+		_ = handler.Requests.Should().BeEmpty();
+	}
+
+	[Theory]
+	[InlineData(0)]
+	[InlineData(-1)]
+	public async Task CreateAsync_WhenUserIdIsNotPositive_RefusesBeforeSending(int id)
+	{
+		var (wrapper, handler) = Create();
+
+		var act = async () => await wrapper.CreateAsync(new CreateTicketRequest { Summary = "S", ClientId = 21, UserId = id }, CancellationToken.None);
+
+		_ = (await act.Should().ThrowAsync<ArgumentOutOfRangeException>()).WithMessage("*UserId*");
+		_ = handler.Requests.Should().BeEmpty();
+	}
+
+	[Fact]
+	public async Task CreateAsync_WhenSiteIdIsNotPositive_RefusesBeforeSending()
+	{
+		var (wrapper, handler) = Create();
+
+		var act = async () => await wrapper.CreateAsync(new CreateTicketRequest { Summary = "S", ClientId = 21, UserId = 9, SiteId = 0 }, CancellationToken.None);
+
+		_ = (await act.Should().ThrowAsync<ArgumentOutOfRangeException>()).WithMessage("*SiteId*");
+		_ = handler.Requests.Should().BeEmpty();
+	}
+
+	[Fact]
+	public async Task CreateAsync_WithAnEmptyList_RefusesBeforeSending()
+	{
+		var (wrapper, handler) = Create();
+
+		var act = async () => await wrapper.CreateAsync([], CancellationToken.None);
+
+		_ = await act.Should().ThrowAsync<ArgumentException>();
+		_ = handler.Requests.Should().BeEmpty();
+	}
+
+	[Fact]
+	public async Task CreateAsync_WhenOneOfSeveralIsInvalid_SendsNone()
+	{
+		var (wrapper, handler) = Create();
+
+		var act = async () => await wrapper.CreateAsync(
+			[new CreateTicketRequest { Summary = "A", ClientId = 21, UserId = 9 }, new CreateTicketRequest { Summary = "B", ClientId = 21, UserId = 0 }],
+			CancellationToken.None);
+
+		_ = (await act.Should().ThrowAsync<ArgumentOutOfRangeException>()).WithMessage("*UserId*");
+		_ = handler.Requests.Should().BeEmpty();
+	}
 }
