@@ -9,9 +9,12 @@ public class ReadOnlyOptionTests
 	{
 		public int SentCount { get; private set; }
 
+		public List<HttpMethod> Methods { get; } = [];
+
 		protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
 		{
 			SentCount++;
+			Methods.Add(request.Method);
 			return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK));
 		}
 	}
@@ -75,6 +78,7 @@ public class ReadOnlyOptionTests
 
 		response.IsSuccessStatusCode.Should().BeTrue();
 		stub.SentCount.Should().Be(1);
+		stub.Methods.Should().ContainSingle().Which.Should().Be(HttpMethod.Get);
 	}
 
 	[Fact]
