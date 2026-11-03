@@ -100,19 +100,12 @@ public class TicketsApiWrapper(ITicketsApi ticketsApi, bool? readOnly = null) : 
 	{
 		ArgumentNullException.ThrowIfNull(request);
 
-		if (request.ClientId <= 0)
-		{
-			throw new ArgumentOutOfRangeException(nameof(request), $"ClientId must be a positive Halo client id (was {request.ClientId}); no request was sent.");
-		}
+		ThrowIfNotPositive(request.ClientId, nameof(request), "ClientId", "client");
+		ThrowIfNotPositive(request.UserId, nameof(request), "UserId", "user");
 
-		if (request.UserId <= 0)
+		if (request.SiteId is { } siteId)
 		{
-			throw new ArgumentOutOfRangeException(nameof(request), $"UserId must be a positive Halo user id (was {request.UserId}); no request was sent.");
-		}
-
-		if (request.SiteId is <= 0)
-		{
-			throw new ArgumentOutOfRangeException(nameof(request), $"SiteId must be a positive Halo site id (was {request.SiteId}); no request was sent.");
+			ThrowIfNotPositive(siteId, nameof(request), "SiteId", "site");
 		}
 	}
 
@@ -174,31 +167,34 @@ public class TicketsApiWrapper(ITicketsApi ticketsApi, bool? readOnly = null) : 
 		}
 	}
 
-	// Halo rejects an id of 0 and uses -1 for "not set", so neither may reach it as a ticket id.
 	private static void ThrowIfNotATicketId(int id, string paramName)
-	{
-		if (id <= 0)
-		{
-			throw new ArgumentOutOfRangeException(paramName, $"Ticket id must be a positive Halo ticket id (was {id}); no request was sent.");
-		}
-	}
+		=> ThrowIfNotPositive(id, paramName, "Ticket id", "ticket");
 
 	// As for a create, a client, user or site that is set must be positive; an unset one is simply not sent.
 	internal static void ValidateForUpdate(UpdateTicketRequest request)
 	{
-		if (request.ClientId is <= 0)
+		if (request.ClientId is { } clientId)
 		{
-			throw new ArgumentOutOfRangeException(nameof(request), $"ClientId must be a positive Halo client id (was {request.ClientId}); no request was sent.");
+			ThrowIfNotPositive(clientId, nameof(request), "ClientId", "client");
 		}
 
-		if (request.UserId is <= 0)
+		if (request.UserId is { } userId)
 		{
-			throw new ArgumentOutOfRangeException(nameof(request), $"UserId must be a positive Halo user id (was {request.UserId}); no request was sent.");
+			ThrowIfNotPositive(userId, nameof(request), "UserId", "user");
 		}
 
-		if (request.SiteId is <= 0)
+		if (request.SiteId is { } siteId)
 		{
-			throw new ArgumentOutOfRangeException(nameof(request), $"SiteId must be a positive Halo site id (was {request.SiteId}); no request was sent.");
+			ThrowIfNotPositive(siteId, nameof(request), "SiteId", "site");
+		}
+	}
+
+	// Halo rejects an id of 0 and uses -1 for "not set", so neither may reach it as an id.
+	private static void ThrowIfNotPositive(int value, string paramName, string label, string kind)
+	{
+		if (value <= 0)
+		{
+			throw new ArgumentOutOfRangeException(paramName, $"{label} must be a positive Halo {kind} id (was {value}); no request was sent.");
 		}
 	}
 
@@ -210,52 +206,102 @@ public class TicketsApiWrapper(ITicketsApi ticketsApi, bool? readOnly = null) : 
 		return ticketsApi.DeleteAsync(id, cancellationToken);
 	}
 
-	/// <inheritdoc />
-	public Task<UpdateTicketResponse> CloseAsync(int id, string resolution, CancellationToken cancellationToken)
+	/// <summary>
+	/// Closes a ticket by updating it to a closed status; Halo has no close route
+	/// </summary>
+	/// <param name="id">The ticket id</param>
+	/// <param name="closedStatusId">The closed status to set; status ids differ per Halo instance, so read it from <see cref="IPsaApi.Statuses"/></param>
+	/// <param name="cancellationToken">Cancellation token</param>
+	/// <returns>The update's response</returns>
+	/// <exception cref="JsonException">
+	/// Halo answered success but the response could not be read; the update may have been applied, so do not retry.
+	/// </exception>
+	public Task<UpdateTicketResponse> CloseAsync(int id, int closedStatusId, CancellationToken cancellationToken)
 	{
 		ThrowIfReadOnly(nameof(CloseAsync));
+		ThrowIfNotPositive(closedStatusId, nameof(closedStatusId), "Closed status id", "status");
 
-		return ticketsApi.CloseAsync(id, resolution, cancellationToken);
+		return UpdateAsync(id, new UpdateTicketRequest { Status = closedStatusId }, cancellationToken);
 	}
 
-	/// <inheritdoc />
-	public Task<UpdateTicketResponse> CloseAsync(int id, CancellationToken cancellationToken)
+	/// <summary>
+	/// Closes a ticket by updating it to a closed status with a closure note; Halo has no close route
+	/// </summary>
+	/// <param name="id">The ticket id</param>
+	/// <param name="closedStatusId">The closed status to set; status ids differ per Halo instance, so read it from <see cref="IPsaApi.Statuses"/></param>
+	/// <param name="closureNote">The note to record on closing; it must not be blank</param>
+	/// <param name="cancellationToken">Cancellation token</param>
+	/// <returns>The update's response</returns>
+	/// <exception cref="JsonException">
+	/// Halo answered success but the response could not be read; the update may have been applied, so do not retry.
+	/// </exception>
+	public Task<UpdateTicketResponse> CloseAsync(int id, int closedStatusId, string closureNote, CancellationToken cancellationToken)
 	{
 		ThrowIfReadOnly(nameof(CloseAsync));
+		ThrowIfNotPositive(closedStatusId, nameof(closedStatusId), "Closed status id", "status");
 
-		return ticketsApi.CloseAsync(id, cancellationToken);
+		if (string.IsNullOrWhiteSpace(closureNote))
+		{
+			throw new ArgumentException("The closure note must not be blank; no request was sent.", nameof(closureNote));
+		}
+
+		return UpdateAsync(id, new UpdateTicketRequest { Status = closedStatusId, ClosureNote = closureNote }, cancellationToken);
 	}
 
-	/// <inheritdoc />
-	public Task<UpdateTicketResponse> ReopenAsync(int id, string reason, CancellationToken cancellationToken)
+	/// <summary>
+	/// Reopens a ticket by updating it to an open status; Halo has no reopen route
+	/// </summary>
+	/// <param name="id">The ticket id</param>
+	/// <param name="openStatusId">The open status to set; status ids differ per Halo instance, so read it from <see cref="IPsaApi.Statuses"/></param>
+	/// <param name="cancellationToken">Cancellation token</param>
+	/// <returns>The update's response</returns>
+	/// <exception cref="JsonException">
+	/// Halo answered success but the response could not be read; the update may have been applied, so do not retry.
+	/// </exception>
+	public Task<UpdateTicketResponse> ReopenAsync(int id, int openStatusId, CancellationToken cancellationToken)
 	{
 		ThrowIfReadOnly(nameof(ReopenAsync));
+		ThrowIfNotPositive(openStatusId, nameof(openStatusId), "Open status id", "status");
 
-		return ticketsApi.ReopenAsync(id, reason, cancellationToken);
+		return UpdateAsync(id, new UpdateTicketRequest { Status = openStatusId }, cancellationToken);
 	}
 
-	/// <inheritdoc />
-	public Task<UpdateTicketResponse> ReopenAsync(int id, CancellationToken cancellationToken)
-	{
-		ThrowIfReadOnly(nameof(ReopenAsync));
-
-		return ticketsApi.ReopenAsync(id, cancellationToken);
-	}
-
-	/// <inheritdoc />
+	/// <summary>
+	/// Assigns a ticket to an agent by updating its agent; Halo has no assign route
+	/// </summary>
+	/// <param name="id">The ticket id</param>
+	/// <param name="agentId">The agent to assign to</param>
+	/// <param name="cancellationToken">Cancellation token</param>
+	/// <returns>The update's response</returns>
+	/// <exception cref="JsonException">
+	/// Halo answered success but the response could not be read; the update may have been applied, so do not retry.
+	/// </exception>
 	public Task<UpdateTicketResponse> AssignAsync(int id, int agentId, CancellationToken cancellationToken)
 	{
 		ThrowIfReadOnly(nameof(AssignAsync));
+		ThrowIfNotPositive(agentId, nameof(agentId), "Agent id", "agent");
 
-		return ticketsApi.AssignAsync(id, agentId, cancellationToken);
+		return UpdateAsync(id, new UpdateTicketRequest { AgentId = agentId }, cancellationToken);
 	}
 
-	/// <inheritdoc />
+	/// <summary>
+	/// Assigns a ticket to an agent and a team by updating them; Halo has no assign route
+	/// </summary>
+	/// <param name="id">The ticket id</param>
+	/// <param name="agentId">The agent to assign to</param>
+	/// <param name="teamId">The team to assign to</param>
+	/// <param name="cancellationToken">Cancellation token</param>
+	/// <returns>The update's response</returns>
+	/// <exception cref="JsonException">
+	/// Halo answered success but the response could not be read; the update may have been applied, so do not retry.
+	/// </exception>
 	public Task<UpdateTicketResponse> AssignAsync(int id, int agentId, int teamId, CancellationToken cancellationToken)
 	{
 		ThrowIfReadOnly(nameof(AssignAsync));
+		ThrowIfNotPositive(agentId, nameof(agentId), "Agent id", "agent");
+		ThrowIfNotPositive(teamId, nameof(teamId), "Team id", "team");
 
-		return ticketsApi.AssignAsync(id, agentId, teamId, cancellationToken);
+		return UpdateAsync(id, new UpdateTicketRequest { AgentId = agentId, TeamId = teamId }, cancellationToken);
 	}
 
 	/// <summary>

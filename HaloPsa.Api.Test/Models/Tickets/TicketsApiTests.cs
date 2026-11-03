@@ -304,8 +304,12 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 	public Task CloseAsync_WithValidId_TestsEndpointBehavior()
 		=> RunAgainstTestTicketAsync(async ticket =>
 		{
+			// Halo's status ids differ per instance, so take a closed one from the statuses it defines
+			var statuses = await HaloClient.Psa.Statuses.GetAllAsync(CancellationToken.None);
+			var closedStatus = statuses.First(status => status.IsClosed);
+
 			// Act
-			var result = await HaloClient.Psa.Tickets.CloseAsync(ticket.Id, "Closed by API test", CancellationToken.None);
+			var result = await HaloClient.Psa.Tickets.CloseAsync(ticket.Id, closedStatus.Id, "Closed by API test", CancellationToken.None);
 
 			// Assert - If close succeeds, verify the response
 			AssertRespondsWithTicket(result, ticket.Id);

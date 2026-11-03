@@ -104,14 +104,27 @@ public class TicketsApiWrapperReadOnlyTests
 		await act.Should().ThrowAsync<InvalidOperationException>();
 	}
 
+	// A status, agent or team id of 0 and a blank note would each fail validation, so a read-only refusal in the next five proves it comes first.
 	[Fact]
 	public async Task CloseAsync_WhenReadOnly_RefusesWithoutCallingTheApi()
 	{
 		var wrapper = new TicketsApiWrapper(new ThrowingTicketsApi(), readOnly: true);
 
-		var act = async () => await wrapper.CloseAsync(1, "done", TestContext.Current.CancellationToken);
+		var act = async () => await wrapper.CloseAsync(1, 0, TestContext.Current.CancellationToken);
 
-		await act.Should().ThrowAsync<InvalidOperationException>();
+		(await act.Should().ThrowAsync<InvalidOperationException>())
+			.WithMessage("*read-only*CloseAsync*");
+	}
+
+	[Fact]
+	public async Task CloseAsync_WithANote_WhenReadOnly_RefusesWithoutCallingTheApi()
+	{
+		var wrapper = new TicketsApiWrapper(new ThrowingTicketsApi(), readOnly: true);
+
+		var act = async () => await wrapper.CloseAsync(1, 0, " ", TestContext.Current.CancellationToken);
+
+		(await act.Should().ThrowAsync<InvalidOperationException>())
+			.WithMessage("*read-only*CloseAsync*");
 	}
 
 	[Fact]
@@ -119,9 +132,21 @@ public class TicketsApiWrapperReadOnlyTests
 	{
 		var wrapper = new TicketsApiWrapper(new ThrowingTicketsApi(), readOnly: true);
 
-		var act = async () => await wrapper.AssignAsync(1, 2, TestContext.Current.CancellationToken);
+		var act = async () => await wrapper.AssignAsync(1, 0, TestContext.Current.CancellationToken);
 
-		await act.Should().ThrowAsync<InvalidOperationException>();
+		(await act.Should().ThrowAsync<InvalidOperationException>())
+			.WithMessage("*read-only*AssignAsync*");
+	}
+
+	[Fact]
+	public async Task AssignAsync_WithATeam_WhenReadOnly_RefusesWithoutCallingTheApi()
+	{
+		var wrapper = new TicketsApiWrapper(new ThrowingTicketsApi(), readOnly: true);
+
+		var act = async () => await wrapper.AssignAsync(1, 0, 0, TestContext.Current.CancellationToken);
+
+		(await act.Should().ThrowAsync<InvalidOperationException>())
+			.WithMessage("*read-only*AssignAsync*");
 	}
 
 	[Fact]
@@ -129,9 +154,10 @@ public class TicketsApiWrapperReadOnlyTests
 	{
 		var wrapper = new TicketsApiWrapper(new ThrowingTicketsApi(), readOnly: true);
 
-		var act = async () => await wrapper.ReopenAsync(1, "again", TestContext.Current.CancellationToken);
+		var act = async () => await wrapper.ReopenAsync(1, 0, TestContext.Current.CancellationToken);
 
-		await act.Should().ThrowAsync<InvalidOperationException>();
+		(await act.Should().ThrowAsync<InvalidOperationException>())
+			.WithMessage("*read-only*ReopenAsync*");
 	}
 
 	[Fact]
@@ -184,24 +210,6 @@ public class TicketsApiWrapperReadOnlyTests
 
 		public Task DeleteAsync(int id, CancellationToken cancellationToken)
 			=> ThrowIfReached<Task>(id, cancellationToken);
-
-		public Task<UpdateTicketResponse> CloseAsync(int id, string resolution, CancellationToken cancellationToken)
-			=> ThrowIfReached<Task<UpdateTicketResponse>>(id, resolution, cancellationToken);
-
-		public Task<UpdateTicketResponse> CloseAsync(int id, CancellationToken cancellationToken)
-			=> ThrowIfReached<Task<UpdateTicketResponse>>(id, cancellationToken);
-
-		public Task<UpdateTicketResponse> ReopenAsync(int id, string reason, CancellationToken cancellationToken)
-			=> ThrowIfReached<Task<UpdateTicketResponse>>(id, reason, cancellationToken);
-
-		public Task<UpdateTicketResponse> ReopenAsync(int id, CancellationToken cancellationToken)
-			=> ThrowIfReached<Task<UpdateTicketResponse>>(id, cancellationToken);
-
-		public Task<UpdateTicketResponse> AssignAsync(int id, int agentId, CancellationToken cancellationToken)
-			=> ThrowIfReached<Task<UpdateTicketResponse>>(id, agentId, cancellationToken);
-
-		public Task<UpdateTicketResponse> AssignAsync(int id, int agentId, int teamId, CancellationToken cancellationToken)
-			=> ThrowIfReached<Task<UpdateTicketResponse>>(id, agentId, teamId, cancellationToken);
 
 		private static T ThrowIfReached<T>(params object?[] arguments)
 		{
