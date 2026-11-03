@@ -155,92 +155,143 @@ public record CreateTicketRequest
 public record UpdateTicketRequest
 {
 	/// <summary>
+	/// The ticket to update. UpdateAsync sets it from its id argument, replacing any value here.
+	/// </summary>
+	[JsonPropertyName("id")]
+	public int Id { get; init; }
+
+	/// <summary>
 	/// The ticket summary/subject
 	/// </summary>
+	[JsonPropertyName("summary")]
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 	public string? Summary { get; init; }
 
 	/// <summary>
 	/// The detailed description of the ticket
 	/// </summary>
+	[JsonPropertyName("details")]
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 	public string? Details { get; init; }
 
 	/// <summary>
 	/// The status of the ticket
 	/// </summary>
+	[JsonPropertyName("status_id")]
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 	public int? Status { get; init; }
 
 	/// <summary>
 	/// The priority level of the ticket
 	/// </summary>
+	[JsonPropertyName("priority_id")]
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 	public int? Priority { get; init; }
 
 	/// <summary>
 	/// The ID of the client this ticket belongs to
 	/// </summary>
+	[JsonPropertyName("client_id")]
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 	public int? ClientId { get; init; }
 
 	/// <summary>
 	/// The ID of the site this ticket belongs to
 	/// </summary>
+	[JsonPropertyName("site_id")]
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 	public int? SiteId { get; init; }
 
 	/// <summary>
 	/// The ID of the user who reported this ticket
 	/// </summary>
+	[JsonPropertyName("user_id")]
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 	public int? UserId { get; init; }
 
 	/// <summary>
 	/// The ID of the agent to assign this ticket to
 	/// </summary>
+	[JsonPropertyName("agent_id")]
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 	public int? AgentId { get; init; }
 
 	/// <summary>
 	/// The ID of the team to assign this ticket to
 	/// </summary>
+	[JsonPropertyName("team_id")]
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 	public int? TeamId { get; init; }
 
 	/// <summary>
 	/// The category of the ticket
 	/// </summary>
+	[JsonPropertyName("categoryid_1")]
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 	public int? CategoryId { get; init; }
 
 	/// <summary>
 	/// The ticket type ID
 	/// </summary>
+	[JsonPropertyName("tickettype_id")]
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 	public int? TicketTypeId { get; init; }
 
 	/// <summary>
-	/// Custom fields for the ticket
+	/// The note to record when the ticket is closed
 	/// </summary>
-	public Dictionary<string, object?>? CustomFields { get; init; }
+	[JsonPropertyName("closure_note")]
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	public string? ClosureNote { get; init; }
+
+	/// <summary>
+	/// Custom field values to write, one per field id
+	/// </summary>
+	[JsonPropertyName("customfields")]
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	public IReadOnlyList<CustomFieldInput>? CustomFields { get; init; }
 
 	/// <summary>
 	/// List of asset IDs to associate with this ticket
 	/// </summary>
+	[JsonPropertyName("assets")]
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	[JsonConverter(typeof(IdObjectListConverter))]
 	public IReadOnlyList<int>? AssetIds { get; init; }
 
 	/// <summary>
 	/// Tags to associate with this ticket
 	/// </summary>
+	[JsonPropertyName("tags")]
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	[JsonConverter(typeof(TagTextListConverter))]
 	public IReadOnlyList<string>? Tags { get; init; }
 
 	/// <summary>
-	/// Whether to suppress email notifications
+	/// Not supported: Halo's ticket update has no such field, so this is never sent.
 	/// </summary>
+	[Obsolete("Halo's ticket update has no such field; this value is never sent.")]
+	[JsonIgnore]
 	public bool? SuppressEmails { get; init; }
 
 	/// <summary>
-	/// Additional notes to add during update
+	/// Not supported: Halo's ticket update has no such field, so this is never sent.
 	/// </summary>
+	[Obsolete("Halo's ticket update has no such field; this value is never sent.")]
+	[JsonIgnore]
 	public string? Notes { get; init; }
 
 	/// <summary>
-	/// Close the ticket with this update
+	/// Not supported: Halo closes a ticket by its status, so this is never sent.
 	/// </summary>
+	[Obsolete("Halo closes a ticket by its status; set Status to a closed status id, or use TicketsApiWrapper.CloseAsync.")]
+	[JsonIgnore]
 	public bool? CloseTicket { get; init; }
 
 	/// <summary>
-	/// Resolution summary when closing the ticket
+	/// Not supported: Halo's field is <see cref="ClosureNote"/>, so this is never sent.
 	/// </summary>
+	[Obsolete("Halo's field is closure_note; use ClosureNote.")]
+	[JsonIgnore]
 	public string? Resolution { get; init; }
 }

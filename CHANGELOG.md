@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Asset ids are sent as `assets: [{"id":...}]` and tags as `tags: [{"text":...}]`; unset fields are no longer sent.
 - A ticket create's response is read whether Halo returns the ticket, an array of tickets or a `ticket` wrapper. Any successful create response that cannot be read, including an empty one, raises a `JsonException` saying the ticket may have been created, with its id when one can be read.
 - `User` reads from Halo's response again: an unreleased change had given it a constructor that System.Text.Json cannot bind.
+- `UpdateTicketRequest` is sent under Halo's names as the one-element array `POST /api/Tickets` takes, with the ticket's id, and only the fields that are set. The package used `PUT /api/Tickets/{id}`, which Halo does not have.
 
 ### Added
 - `CreateTicketRequest.DetailsHtml` and `TargetDate`; `CustomFieldInput`; a list overload of `CreateAsync`.
@@ -20,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Client.CustomFields`.
 - `User.Login`, `FirstName`, `Surname`, `EmailAddress2`, `EmailAddress3` and `LinkedAgentId`; `UserFilter` (`search`, `client_id`, `includeinactive`, `exclude_agents`, `pageinate`, `page_size`, `page_no`) with `UsersApiWrapper.GetResponseAsync(UserFilter?)` and `GetAllAsync(UserFilter?)`.
 - `HaloClientOptions.UserAgent`: the User-Agent sent with every request, the token request included. Null or blank keeps `Halo.Api/.NET`; a value that is not a valid User-Agent header throws an `ArgumentException` naming `UserAgent` when the client is created.
+- `UpdateTicketRequest.ClosureNote` (`closure_note`); `UpdateTicketResponse.Tickets`.
 
 ### Changed
 - `CreateTicketRequest.CustomFields` is now `IReadOnlyList<CustomFieldInput>`, sent as `customfields: [{"id":...,"value":...}]`. Replace a dictionary keyed by field id with one `CustomFieldInput` per field.
@@ -31,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ITicketsApi.CreateAsync(CreateTicketRequest, ...)` is obsolete: Halo's `POST /api/Tickets` takes an array. Use the list overload, or `Psa.Tickets.CreateAsync`, which sends one ticket as an array.
 - `User.Username` is read-only (obsolete, returns `Login`), so an object initialiser or `with` expression that sets it no longer compiles.
 - A ticket create whose response cannot be read throws `JsonException` instead of Refit's `ApiException`, so a `catch (ApiException)` around `CreateAsync` no longer catches it.
+- `UpdateTicketRequest.CustomFields` is now `IReadOnlyList<CustomFieldInput>`; `SuppressEmails`, `Notes`, `CloseTicket` and `Resolution` are obsolete and never sent.
+- `ITicketsApi.UpdateAsync(int, UpdateTicketRequest)` (`PUT /api/Tickets/{id}`) is replaced by `UpdateAsync(IReadOnlyList<UpdateTicketRequest>)` on `POST /api/Tickets`; `TicketsApiWrapper.UpdateAsync(id, request)` keeps its signature. An update refuses an id that is not positive, and an update response that cannot be read raises a `JsonException` saying the update may have been applied.
 
 ### Fixed (#72)
 - `TicketFilter` is now sent under Halo's parameter names (`client_id`, `requesttype_id`, `open_only`, `pageinate`, `page_size`, `mine`, `lastupdatefromdate` and others). Before this, Halo silently ignored most filters and returned unfiltered results.

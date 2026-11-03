@@ -255,9 +255,32 @@ public class TicketModelTests
 	}
 
 	[Fact]
+	public void UpdateTicketRequest_WithClosureNoteAndCustomFields_CanBeCreated()
+	{
+		// Arrange
+		IReadOnlyList<CustomFieldInput> customFields = [new CustomFieldInput { Id = 1, Value = "Value1" }];
+
+		// Act
+		var request = new UpdateTicketRequest
+		{
+			Id = 12,
+			Status = 9,
+			ClosureNote = "Issue resolved successfully",
+			CustomFields = customFields
+		};
+
+		// Assert
+		_ = request.Id.Should().Be(12);
+		_ = request.Status.Should().Be(9);
+		_ = request.ClosureNote.Should().Be("Issue resolved successfully");
+		_ = request.CustomFields.Should().BeEquivalentTo(customFields);
+	}
+
+	[Fact]
 	public void UpdateTicketRequest_WithCloseTicket_CanBeCreated()
 	{
 		// Arrange & Act
+#pragma warning disable CS0618 // obsolete members stay settable
 		var request = new UpdateTicketRequest
 		{
 			CloseTicket = true,
@@ -269,6 +292,7 @@ public class TicketModelTests
 		_ = request.CloseTicket.Should().BeTrue();
 		_ = request.Resolution.Should().Be("Issue resolved successfully");
 		_ = request.Notes.Should().Be("Closing notes");
+#pragma warning restore CS0618
 	}
 
 	[Fact]

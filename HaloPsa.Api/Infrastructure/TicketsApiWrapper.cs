@@ -116,12 +116,90 @@ public class TicketsApiWrapper(ITicketsApi ticketsApi, bool? readOnly = null) : 
 		}
 	}
 
-	/// <inheritdoc />
+	/// <summary>
+	/// Updates a ticket, sent as the one-element array Halo's POST /api/Tickets takes, with <paramref name="id"/> in the body
+	/// </summary>
+	/// <exception cref="JsonException">
+	/// Halo answered success but the response could not be read; the update may have been applied, so do not retry.
+	/// The message names the ticket id.
+	/// </exception>
 	public Task<UpdateTicketResponse> UpdateAsync(int id, UpdateTicketRequest request, CancellationToken cancellationToken)
 	{
 		ThrowIfReadOnly(nameof(UpdateAsync));
+		ArgumentNullException.ThrowIfNull(request);
+		ThrowIfNotATicketId(id, nameof(id));
+		ValidateForUpdate(request);
 
-		return ticketsApi.UpdateAsync(id, request, cancellationToken);
+		return SendUpdateAsync([request with { Id = id }], cancellationToken);
+	}
+
+	/// <inheritdoc />
+	Task<UpdateTicketResponse> ITicketsApi.UpdateAsync(IReadOnlyList<UpdateTicketRequest> requests, CancellationToken cancellationToken)
+	{
+		ThrowIfReadOnly(nameof(UpdateAsync));
+		ArgumentNullException.ThrowIfNull(requests);
+
+		if (requests.Count == 0)
+		{
+			throw new ArgumentException("At least one ticket is required; no request was sent.", nameof(requests));
+		}
+
+		foreach (var request in requests)
+		{
+			ArgumentNullException.ThrowIfNull(request);
+			ThrowIfNotATicketId(request.Id, nameof(requests));
+			ValidateForUpdate(request);
+		}
+
+		return SendUpdateAsync(requests, cancellationToken);
+	}
+
+	// An unreadable 2xx body arrives as an ApiException, which a caller would treat as an HTTP failure and retry although the update may have been applied.
+	private async Task<UpdateTicketResponse> SendUpdateAsync(IReadOnlyList<UpdateTicketRequest> requests, CancellationToken cancellationToken)
+	{
+		var ids = string.Join(", ", requests.Select(request => request.Id));
+
+		try
+		{
+			return await ticketsApi.UpdateAsync(requests, cancellationToken).ConfigureAwait(false)
+				?? throw new JsonException(UpdateTicketResponseConverter.UnreadableMessage(ids));
+		}
+		catch (Exception ex) when (ex.InnerException is JsonException inner)
+		{
+			var message = inner.Message.Contains(UpdateTicketResponseConverter.MayHaveBeenApplied, StringComparison.Ordinal)
+				? inner.Message
+				: UpdateTicketResponseConverter.UnreadableMessage(ids);
+
+			throw new JsonException(message, ex);
+		}
+	}
+
+	// Halo rejects an id of 0 and uses -1 for "not set", so neither may reach it as a ticket id.
+	private static void ThrowIfNotATicketId(int id, string paramName)
+	{
+		if (id <= 0)
+		{
+			throw new ArgumentOutOfRangeException(paramName, $"Ticket id must be a positive Halo ticket id (was {id}); no request was sent.");
+		}
+	}
+
+	// As for a create, a client, user or site that is set must be positive; an unset one is simply not sent.
+	internal static void ValidateForUpdate(UpdateTicketRequest request)
+	{
+		if (request.ClientId is <= 0)
+		{
+			throw new ArgumentOutOfRangeException(nameof(request), $"ClientId must be a positive Halo client id (was {request.ClientId}); no request was sent.");
+		}
+
+		if (request.UserId is <= 0)
+		{
+			throw new ArgumentOutOfRangeException(nameof(request), $"UserId must be a positive Halo user id (was {request.UserId}); no request was sent.");
+		}
+
+		if (request.SiteId is <= 0)
+		{
+			throw new ArgumentOutOfRangeException(nameof(request), $"SiteId must be a positive Halo site id (was {request.SiteId}); no request was sent.");
+		}
 	}
 
 	/// <inheritdoc />

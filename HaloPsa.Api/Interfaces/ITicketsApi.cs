@@ -80,16 +80,18 @@ public interface ITicketsApi
 		CancellationToken cancellationToken);
 
 	/// <summary>
-	/// Update an existing ticket
+	/// Update tickets: Halo has no PUT for a ticket, so an update is the POST a create uses, with each ticket's id in its body
 	/// </summary>
-	/// <param name="id">The ticket ID to update</param>
-	/// <param name="request">The ticket update request</param>
+	/// <param name="requests">The ticket update requests, each carrying the id of the ticket to update</param>
 	/// <param name="cancellationToken">Cancellation token</param>
-	/// <returns>The updated ticket</returns>
-	[Put("/api/Tickets/{id}")]
+	/// <returns>The response: <see cref="UpdateTicketResponse.Tickets"/> holds every ticket Halo returned, and <see cref="UpdateTicketResponse.Ticket"/> (and <see cref="UpdateTicketResponse.TicketId"/>) is the first</returns>
+	/// <exception cref="JsonException">
+	/// Halo answered success but the response could not be read; the update may have been applied, so do not retry.
+	/// The message names the ticket id when one could be read.
+	/// </exception>
+	[Post("/api/Tickets")]
 	Task<UpdateTicketResponse> UpdateAsync(
-		int id,
-		[Body] UpdateTicketRequest request,
+		[Body] IReadOnlyList<UpdateTicketRequest> requests,
 		CancellationToken cancellationToken);
 
 	/// <summary>

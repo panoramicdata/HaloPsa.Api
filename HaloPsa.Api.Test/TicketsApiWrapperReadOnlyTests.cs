@@ -22,7 +22,8 @@ namespace HaloPsa.Api.Test;
 /// </remarks>
 public class TicketsApiWrapperReadOnlyTests
 {
-	private static readonly UpdateTicketRequest _update = new() { Notes = "note" };
+	// Id 0 would fail validation on the list path, so a read-only refusal there proves it comes first.
+	private static readonly UpdateTicketRequest _update = new() { Status = 2 };
 
 	// ClientId 0 would also fail validation, so a read-only refusal proves it comes first.
 	private static readonly CreateTicketRequest _invalidCreate = new() { Summary = "S", ClientId = 0, UserId = 9 };
@@ -58,6 +59,17 @@ public class TicketsApiWrapperReadOnlyTests
 		(await act.Should().ThrowAsync<InvalidOperationException>())
 			.WithMessage("*read-only*")
 			.WithMessage("*no*request was sent*");
+	}
+
+	[Fact]
+	public async Task UpdateAsync_ThroughTheInterfaceList_WhenReadOnly_RefusesWithoutCallingTheApi()
+	{
+		var wrapper = new TicketsApiWrapper(new ThrowingTicketsApi(), readOnly: true);
+
+		var act = async () => await ((ITicketsApi)wrapper).UpdateAsync([_update], TestContext.Current.CancellationToken);
+
+		(await act.Should().ThrowAsync<InvalidOperationException>())
+			.WithMessage("*read-only*");
 	}
 
 	[Fact]
@@ -167,8 +179,8 @@ public class TicketsApiWrapperReadOnlyTests
 		public Task<CreateTicketResponse> CreateAsync(IReadOnlyList<CreateTicketRequest> requests, CancellationToken cancellationToken)
 			=> ThrowIfReached<Task<CreateTicketResponse>>(requests, cancellationToken);
 
-		public Task<UpdateTicketResponse> UpdateAsync(int id, UpdateTicketRequest request, CancellationToken cancellationToken)
-			=> ThrowIfReached<Task<UpdateTicketResponse>>(id, request, cancellationToken);
+		public Task<UpdateTicketResponse> UpdateAsync(IReadOnlyList<UpdateTicketRequest> requests, CancellationToken cancellationToken)
+			=> ThrowIfReached<Task<UpdateTicketResponse>>(requests, cancellationToken);
 
 		public Task DeleteAsync(int id, CancellationToken cancellationToken)
 			=> ThrowIfReached<Task>(id, cancellationToken);
