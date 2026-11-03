@@ -1,5 +1,6 @@
 using HaloPsa.Api.Interfaces;
 using HaloPsa.Api.Models.Tickets;
+using System.Text.Json;
 
 namespace HaloPsa.Api.Infrastructure;
 
@@ -69,7 +70,21 @@ public class TicketsApiWrapper(ITicketsApi ticketsApi, bool? readOnly = null) : 
 			ValidateForCreate(request);
 		}
 
-		return ticketsApi.CreateAsync(requests, cancellationToken);
+		return SendCreateAsync(requests, cancellationToken);
+	}
+
+	// Refit wraps a failed deserialisation in an ApiException, which a caller would treat as an HTTP failure and retry into a duplicate ticket.
+	private async Task<CreateTicketResponse> SendCreateAsync(IReadOnlyList<CreateTicketRequest> requests, CancellationToken cancellationToken)
+	{
+		try
+		{
+			return await ticketsApi.CreateAsync(requests, cancellationToken).ConfigureAwait(false);
+		}
+		catch (Exception ex) when (ex.InnerException is JsonException inner
+			&& inner.Message.Contains(CreateTicketResponseConverter.MayHaveBeenCreated, StringComparison.Ordinal))
+		{
+			throw new JsonException(inner.Message, ex);
+		}
 	}
 
 	// Halo rejects an id of 0 and uses -1 for "not set", so neither may reach it as a client, user or site.

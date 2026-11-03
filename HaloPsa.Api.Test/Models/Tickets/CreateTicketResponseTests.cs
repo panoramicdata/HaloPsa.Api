@@ -79,14 +79,14 @@ public class CreateTicketResponseTests
 	}
 
 	[Fact]
-	public async Task CreateAsync_WhenHaloAnswersWithAnUnreadableTicket_TheInnerErrorNamesTheId()
+	public async Task CreateAsync_WhenHaloAnswersWithAnUnreadableTicket_ThrowsAnErrorNamingTheId()
 	{
 		var handler = new CapturingHandler("""{"id":903}""");
-		var wrapper = new TicketsApiWrapper(RestService.For<ITicketsApi>(handler.CreateClient()));
+		var psa = new PsaApi(handler.CreateClient(), readOnly: false);
 
-		var act = async () => await wrapper.CreateAsync(new CreateTicketRequest { Summary = "S", ClientId = 21, UserId = 9 }, CancellationToken.None);
+		var act = async () => await psa.Tickets.CreateAsync(new CreateTicketRequest { Summary = "S", ClientId = 21, UserId = 9 }, CancellationToken.None);
 
-		// Refit wraps a deserialisation failure in an ApiException, so the id is on the inner exception.
-		_ = (await act.Should().ThrowAsync<ApiException>()).WithInnerException<JsonException>().WithMessage("*may have been created*903*");
+		var thrown = (await act.Should().ThrowAsync<JsonException>()).WithMessage("*may have been created*903*").Which;
+		_ = thrown.InnerException.Should().BeOfType<ApiException>();
 	}
 }
