@@ -11,7 +11,7 @@ namespace HaloPsa.Api.Infrastructure;
 /// <param name="readOnly">
 /// When <see langword="true"/>, every write refuses before a request is sent. <see langword="null"/>
 /// - the default - means read/write, so existing callers are unaffected. See
-/// <see cref="HaloClientOptions.ReadOnly"/>.
+/// <see cref="HaloClientOptions.IsReadOnly"/>.
 /// </param>
 /// <remarks>
 /// The read-only check lives here, on the wrapper, rather than in each caller. Every write to a
@@ -332,7 +332,7 @@ public class TicketsApiWrapper(ITicketsApi ticketsApi, bool? readOnly = null) : 
 		{
 			throw new InvalidOperationException(
 				$"This HaloPSA client is configured read-only, so {operation} was refused and no "
-				+ "request was sent. Set HaloClientOptions.ReadOnly to false (or leave it null) to "
+				+ "request was sent. Set HaloClientOptions.IsReadOnly to false to "
 				+ "permit writes.");
 		}
 	}
