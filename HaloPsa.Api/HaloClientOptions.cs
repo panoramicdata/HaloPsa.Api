@@ -89,30 +89,11 @@ public class HaloClientOptions
 	/// <summary>
 	/// Gets or sets whether this client is restricted to reads. Superseded by <see cref="IsReadOnly"/>.
 	/// </summary>
-	/// <remarks>
-	/// <para>
-	/// <see langword="true"/> makes every write refuse: creating, updating, deleting, closing,
-	/// reopening or assigning a ticket throws <see cref="InvalidOperationException"/> before any
-	/// request is sent. Reads are unaffected.
-	/// </para>
-	/// <para>
-	/// <see langword="null"/> - the default - means read/write, and is deliberately not the same as
-	/// <see langword="false"/> in intent: null is "the caller did not express a preference", which
-	/// is the state every existing consumer is in. Defaulting null to unrestricted keeps this
-	/// property backward compatible, so adding it cannot quietly break a caller that never sets it.
-	/// </para>
-	/// <para>
-	/// A caller that wants safe-by-default should set this to <see langword="true"/> explicitly.
-	/// Magic Suite does exactly that: its own <c>Connection.ReadOnly</c> defaults to true and is
-	/// passed down here, so the permissive default in this library is never what governs a Magic
-	/// Suite connection.
-	/// </para>
-	/// </remarks>
 	[Obsolete("Use IsReadOnly")]
-	public bool? ReadOnly
+	public bool ReadOnly
 	{
-		get => IsReadOnly ? true : null;
-		init => IsReadOnly = value == true;
+		get => IsReadOnly;
+		set => IsReadOnly = value;
 	}
 
 	/// <summary>
