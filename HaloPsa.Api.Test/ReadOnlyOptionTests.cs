@@ -44,10 +44,10 @@ public class ReadOnlyOptionTests
 		=> CreateOptions(isReadOnly: false).IsReadOnly.Should().BeFalse();
 
 	[Fact]
-	public void LegacyReadOnly_DefaultsToNullAndMapsToIsReadOnly()
+	public void LegacyReadOnly_DefaultsToFalseAndMapsToIsReadOnly()
 	{
 #pragma warning disable CS0618 // The alias is what is under test
-		new HaloClientOptions { Account = "a", ClientId = "b", ClientSecret = "c" }.ReadOnly.Should().BeNull();
+		new HaloClientOptions { Account = "a", ClientId = "b", ClientSecret = "c" }.ReadOnly.Should().BeFalse();
 
 		var options = new HaloClientOptions { Account = "a", ClientId = "b", ClientSecret = "c", ReadOnly = true };
 		options.IsReadOnly.Should().BeTrue();
@@ -112,7 +112,7 @@ public class ReadOnlyOptionTests
 	{
 		using var client = new HaloClient(CreateOptions(isReadOnly: true));
 
-		var act = () => client.Psa.Tickets.CloseAsync(1, TestContext.Current.CancellationToken);
+		var act = () => client.Psa.Tickets.CloseAsync(1, 2, TestContext.Current.CancellationToken);
 
 		await act.Should().ThrowAsync<InvalidOperationException>();
 	}
