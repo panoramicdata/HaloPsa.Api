@@ -45,7 +45,7 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 		var allTickets = await HaloClient.Psa.Tickets.GetAllAsync(CancellationToken.None);
 
 		// If no tickets exist, create a test ticket first
-		allTickets = await EnsureTestTicketsExistForClientFilterAsync(allTickets, clients[0].Id);
+		allTickets = await EnsureTestTicketsExistForClientFilterAsync(allTickets);
 		if (allTickets is null)
 		{
 			// Still no tickets, skip this test
@@ -376,8 +376,7 @@ public class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(fixture)
 	/// are still no tickets and the test should skip).
 	/// </summary>
 	private async Task<TicketsResponse?> EnsureTestTicketsExistForClientFilterAsync(
-		TicketsResponse allTickets,
-		int firstClientId)
+		TicketsResponse allTickets)
 	{
 		if (allTickets.Tickets.Count > 0)
 		{
