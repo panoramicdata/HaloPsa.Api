@@ -1,6 +1,5 @@
-using HaloPsa.Api.Infrastructure;
+using HaloPsa.Api.Http;
 using HaloPsa.Api.Interfaces;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace HaloPsa.Api;
 
@@ -24,7 +23,7 @@ public class HaloClient : IHaloClient, IDisposable
 
 		_options = options;
 		Account = options.Account;
-		_httpClient = CreateHttpClient();
+		_httpClient = DefaultHttpClientFactory.Create(options);
 
 		// Initialize API modules lazily
 		Psa = new Lazy<IPsaApi>(() => new PsaApi(_httpClient, _options.IsReadOnly)).Value;
@@ -58,70 +57,6 @@ public class HaloClient : IHaloClient, IDisposable
 	public string BaseUrl => _options.EffectiveBaseUrl;
 
 	internal HttpClient HttpClient => _httpClient;
-
-	private HttpClient CreateHttpClient()
-	{
-		var handler = new HttpClientHandler();
-
-		// Build the handler chain (order matters - authentication should be innermost, error handling outermost)
-		DelegatingHandler chain = new AuthenticationHandler(_options)
-		{
-			// Set the innermost handler (AuthenticationHandler) to point to HttpClientHandler
-			InnerHandler = handler
-		};
-
-		if (_options.MaxRetryAttempts > 0)
-		{
-			var retryHandler = new RetryHandler(
-				_options.MaxRetryAttempts,
-				_options.RetryDelay,
-				_options.UseExponentialBackoff,
-				_options.MaxRetryDelay,
-				_options.Logger)
-			{
-				InnerHandler = chain
-			};
-			chain = retryHandler;
-		}
-
-		if (_options.EnableRequestLogging || _options.EnableResponseLogging)
-		{
-			var loggingHandler = new LoggingHandler(
-				_options.Logger ?? NullLogger.Instance,
-				_options.EnableRequestLogging,
-				_options.EnableResponseLogging)
-			{
-				InnerHandler = chain
-			};
-			chain = loggingHandler;
-		}
-
-		// Add error handling as the outermost handler (wraps everything)
-		var errorHandler = new ErrorHandler(_options.Logger)
-		{
-			InnerHandler = chain
-		};
-
-		var readOnlyHandler = new ReadOnlyHandler(_options)
-		{
-			InnerHandler = errorHandler
-		};
-
-		var httpClient = new HttpClient(readOnlyHandler)
-		{
-			BaseAddress = new Uri(_options.EffectiveBaseUrl),
-			Timeout = _options.RequestTimeout
-		};
-
-		// Add default headers
-		httpClient.DefaultRequestHeaders.Add("User-Agent", _options.EffectiveUserAgent);
-		foreach (var header in _options.DefaultHeaders)
-		{
-			httpClient.DefaultRequestHeaders.Add(header.Key, header.Value);
-		}
-
-		return httpClient;
-	}
 
 	/// <summary>
 	/// Disposes the HTTP client and releases resources
