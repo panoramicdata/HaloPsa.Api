@@ -9,28 +9,11 @@ public partial class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(
 {
 	[Fact]
 	public async Task GetAllAsync_WithoutFilter_ReturnsTickets()
-	{
-		// Act
-		var result = await HaloClient.Psa.Tickets.GetAllAsync(CancellationToken.None);
-
-		// Assert
-		AssertTicketList(result);
-		_ = result.RecordCount.Should().BeGreaterThanOrEqualTo(0);
-	}
+		=> _ = (await QueryAsync(null)).RecordCount.Should().BeGreaterThanOrEqualTo(0);
 
 	[Fact]
 	public async Task GetAllAsync_WithCountFilter_ReturnsLimitedResults()
-	{
-		// Arrange
-		var filter = new TicketFilter { Count = 5 };
-
-		// Act
-		var result = await HaloClient.Psa.Tickets.GetAllAsync(filter, CancellationToken.None);
-
-		// Assert
-		AssertTicketList(result);
-		_ = result.Tickets.Count.Should().BeLessThanOrEqualTo(5);
-	}
+		=> _ = (await QueryAsync(new TicketFilter { Count = 5 })).Tickets.Count.Should().BeLessThanOrEqualTo(5);
 
 	[Fact]
 	public async Task GetAllAsync_WithClientFilter_ReturnsFilteredResults()
@@ -59,13 +42,7 @@ public partial class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(
 
 		// If no tickets have client assignments, just use the first client and verify the filter works
 		var clientId = clientsWithTickets.Count != 0 ? clientsWithTickets.First() : clients[0].Id;
-		var filter = new TicketFilter { ClientId = clientId, Count = 10 };
-
-		// Act
-		var result = await HaloClient.Psa.Tickets.GetAllAsync(filter, CancellationToken.None);
-
-		// Assert
-		AssertTicketList(result);
+		var result = await QueryAsync(new TicketFilter { ClientId = clientId, Count = 10 });
 
 		// The filter should work correctly - either return matching tickets or none
 		if (result.Tickets.Count > 0)
@@ -76,7 +53,6 @@ public partial class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(
 				$"All tickets should either have no client (0) or match client ID {clientId}");
 		}
 	}
-
 	[Fact]
 	public async Task GetAllAsync_WithPagination_ReturnsPaginatedResults()
 	{
@@ -91,18 +67,8 @@ public partial class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(
 			return;
 		}
 
-		var filter = new TicketFilter
-		{
-			Paginate = true,
-			PageSize = 5,
-			PageNo = 1
-		};
+		var result = await QueryAsync(new TicketFilter { Paginate = true, PageSize = 5, PageNo = 1 });
 
-		// Act
-		var result = await HaloClient.Psa.Tickets.GetAllAsync(filter, CancellationToken.None);
-
-		// Assert
-		_ = result.Should().NotBeNull();
 		_ = result.IsPaginated.Should().BeTrue();
 		_ = result.PageSize.Should().Be(5);
 		_ = result.PageNo.Should().Be(1);
@@ -116,13 +82,7 @@ public partial class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(
 		var searchTerm = "SearchTest";
 		await EnsureTestTicketWithContentAsync(searchTerm, CancellationToken.None);
 
-		var filter = new TicketFilter { Search = searchTerm, Count = 10 };
-
-		// Act
-		var result = await HaloClient.Psa.Tickets.GetAllAsync(filter, CancellationToken.None);
-
-		// Assert
-		AssertTicketList(result);
+		var result = await QueryAsync(new TicketFilter { Search = searchTerm, Count = 10 });
 
 		// If there are results, they should contain the search term
 		if (result.Tickets.Count > 0)
@@ -135,22 +95,13 @@ public partial class TicketsApiTests(IntegrationTestFixture fixture) : TestBase(
 	public Task GetByIdAsync_WithValidId_ReturnsTicket()
 		=> RunAgainstTestTicketAsync(async ticket =>
 		{
-			// Act
 			var result = await HaloClient.Psa.Tickets.GetByIdAsync(ticket.Id, CancellationToken.None);
 
-			// Assert
 			_ = result.Should().NotBeNull();
 			_ = result.Id.Should().Be(ticket.Id);
 		});
 
 	[Fact]
-	public async Task GetByIdAsync_WithInvalidId_ThrowsNotFoundException()
-	{
-		// Arrange
-		var invalidId = -999999; // Use clearly invalid ID
-
-		// Act & Assert
-		Func<Task> act = async () => await HaloClient.Psa.Tickets.GetByIdAsync(invalidId, CancellationToken.None);
-		_ = await act.Should().ThrowAsync<HaloNotFoundException>();
-	}
+	public Task GetByIdAsync_WithInvalidId_ThrowsNotFoundException()
+		=> AssertThrowsAsync<HaloNotFoundException>(() => HaloClient.Psa.Tickets.GetByIdAsync(-999999, CancellationToken.None));
 }

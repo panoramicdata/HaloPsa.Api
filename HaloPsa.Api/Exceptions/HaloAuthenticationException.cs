@@ -9,7 +9,7 @@ public class HaloAuthenticationException : HaloApiException
 	/// Initializes a new instance of the HaloAuthenticationException class with a specified error message
 	/// </summary>
 	/// <param name="message">The message that describes the error</param>
-	public HaloAuthenticationException(string message) : base(message)
+	public HaloAuthenticationException(string message) : this(message, new HaloApiErrorContext())
 	{
 	}
 
@@ -18,7 +18,8 @@ public class HaloAuthenticationException : HaloApiException
 	/// </summary>
 	/// <param name="message">The message that describes the error</param>
 	/// <param name="innerException">The exception that is the cause of the current exception</param>
-	public HaloAuthenticationException(string message, Exception innerException) : base(message, innerException)
+	public HaloAuthenticationException(string message, Exception innerException)
+		: this(message, new HaloApiErrorContext { InnerException = innerException })
 	{
 	}
 
@@ -27,7 +28,8 @@ public class HaloAuthenticationException : HaloApiException
 	/// </summary>
 	/// <param name="message">The message that describes the error</param>
 	/// <param name="statusCode">The HTTP status code associated with the error</param>
-	public HaloAuthenticationException(string message, int statusCode) : base(message, statusCode)
+	public HaloAuthenticationException(string message, int statusCode)
+		: this(message, new HaloApiErrorContext { StatusCode = statusCode })
 	{
 	}
 
@@ -58,7 +60,24 @@ public class HaloAuthenticationException : HaloApiException
 		string? requestUrl,
 		string? requestMethod,
 		Exception? innerException)
-		: base(message, statusCode, errorCode, details, requestUrl, requestMethod, innerException)
+		: this(message, ContextOf(statusCode, errorCode, details, requestUrl, requestMethod, innerException))
 	{
 	}
+
+	private static HaloApiErrorContext ContextOf(
+		int? statusCode,
+		string? errorCode,
+		Dictionary<string, object?>? details,
+		string? requestUrl,
+		string? requestMethod,
+		Exception? innerException)
+		=> new()
+		{
+			StatusCode = statusCode,
+			ErrorCode = errorCode,
+			Details = details,
+			RequestUrl = requestUrl,
+			RequestMethod = requestMethod,
+			InnerException = innerException
+		};
 }

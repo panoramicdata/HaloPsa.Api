@@ -274,4 +274,19 @@ public partial class TicketsApiTests
 		_ = result.Should().NotBeNull();
 		_ = result.Tickets.Should().NotBeNull();
 	}
+
+	private async Task<TicketsResponse> QueryAsync(TicketFilter? filter)
+	{
+		var result = filter is null
+			? await HaloClient.Psa.Tickets.GetAllAsync(CancellationToken.None)
+			: await HaloClient.Psa.Tickets.GetAllAsync(filter, CancellationToken.None);
+
+		AssertTicketList(result);
+
+		return result;
+	}
+
+	private static async Task AssertThrowsAsync<TException>(Func<Task> act)
+		where TException : Exception
+		=> _ = await FluentActions.Awaiting(act).Should().ThrowAsync<TException>();
 }

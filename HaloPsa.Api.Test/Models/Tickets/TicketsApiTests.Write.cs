@@ -57,8 +57,7 @@ public partial class TicketsApiTests
 		};
 
 		// Act & Assert
-		Func<Task> act = async () => await HaloClient.Psa.Tickets.CreateAsync(invalidRequest, CancellationToken.None);
-		_ = await act.Should().ThrowAsync<HaloBadRequestException>();
+		await AssertThrowsAsync<HaloBadRequestException>(() => HaloClient.Psa.Tickets.CreateAsync(invalidRequest, CancellationToken.None));
 	}
 
 	[Fact]
