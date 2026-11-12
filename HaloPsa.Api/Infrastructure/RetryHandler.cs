@@ -42,7 +42,7 @@ internal sealed class RetryHandler(
 
 				if (!ShouldRetry(request.Method, response))
 				{
-					LogSuccessAfterRetry(request, attempt);
+					LogSuccessAfterRetry(request, response, attempt);
 					return response;
 				}
 
@@ -74,9 +74,9 @@ internal sealed class RetryHandler(
 	private static bool ShouldRetry(HttpMethod method, HttpResponseMessage response)
 		=> !response.IsSuccessStatusCode && MayRetry(method, response.StatusCode);
 
-	private void LogSuccessAfterRetry(HttpRequestMessage request, int attempt)
+	private void LogSuccessAfterRetry(HttpRequestMessage request, HttpResponseMessage response, int attempt)
 	{
-		if (attempt > 0 && _logger?.IsEnabled(LogLevel.Information) == true)
+		if (attempt > 0 && response.IsSuccessStatusCode && _logger?.IsEnabled(LogLevel.Information) == true)
 		{
 			LogSuccessOnRetry(_logger, attempt + 1, request.Method, request.RequestUri);
 		}

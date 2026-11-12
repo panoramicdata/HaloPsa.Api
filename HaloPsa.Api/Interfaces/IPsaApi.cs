@@ -34,6 +34,16 @@ public interface IPsaApi
 	PrioritiesApiWrapper Priorities { get; }
 
 	/// <summary>
+	/// Gets the Teams API
+	/// </summary>
+	TeamsApiWrapper Teams { get; }
+
+	/// <summary>
+	/// Gets the Categories API
+	/// </summary>
+	CategoriesApiWrapper Categories { get; }
+
+	/// <summary>
 	/// Gets the Actions API, which reads a ticket's notes and history. Read-only.
 	/// </summary>
 	ActionsApiWrapper Actions { get; }

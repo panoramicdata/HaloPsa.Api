@@ -1,6 +1,5 @@
 using HaloPsa.Api.Models.Tickets;
 using Refit;
-using System.Text.Json;
 
 namespace HaloPsa.Api.Interfaces;
 
@@ -70,8 +69,8 @@ public interface ITicketsApi
 	/// <param name="requests">The ticket creation requests</param>
 	/// <param name="cancellationToken">Cancellation token</param>
 	/// <returns>The response: <see cref="TicketWriteResponse.Tickets"/> holds every ticket Halo returned, and <see cref="TicketWriteResponse.Ticket"/> (and <see cref="TicketWriteResponse.TicketId"/>) is the first</returns>
-	/// <exception cref="JsonException">
-	/// Halo answered success but the response could not be read; the ticket may have been created, so do not retry.
+	/// <exception cref="Refit.ApiException">
+	/// Halo answered success but the response could not be read (TicketsApiWrapper raises a JsonException for this instead); the ticket may have been created, so do not retry.
 	/// The message names the ticket id when one could be read.
 	/// </exception>
 	[Post("/api/Tickets")]
@@ -85,8 +84,8 @@ public interface ITicketsApi
 	/// <param name="requests">The ticket update requests, each carrying the id of the ticket to update</param>
 	/// <param name="cancellationToken">Cancellation token</param>
 	/// <returns>The response: <see cref="TicketWriteResponse.Tickets"/> holds every ticket Halo returned, and <see cref="TicketWriteResponse.Ticket"/> (and <see cref="TicketWriteResponse.TicketId"/>) is the first</returns>
-	/// <exception cref="JsonException">
-	/// Halo answered success but the response could not be read; the update may have been applied, so do not retry.
+	/// <exception cref="Refit.ApiException">
+	/// Halo answered success but the response could not be read (TicketsApiWrapper raises a JsonException for this instead); the update may have been applied, so do not retry.
 	/// The message names the ticket id when one could be read.
 	/// </exception>
 	[Post("/api/Tickets")]

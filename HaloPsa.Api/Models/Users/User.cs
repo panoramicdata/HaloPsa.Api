@@ -80,7 +80,7 @@ public record User
 	/// <summary>
 	/// The user's site/location
 	/// </summary>
-	[JsonPropertyName("site")]
+	[JsonPropertyName("site_name")]
 	public string? Site { get; init; }
 
 	/// <summary>
@@ -92,13 +92,13 @@ public record User
 	/// <summary>
 	/// The user's telephone number
 	/// </summary>
-	[JsonPropertyName("telephone")]
+	[JsonPropertyName("phonenumber")]
 	public string? Telephone { get; init; }
 
 	/// <summary>
 	/// The user's mobile number
 	/// </summary>
-	[JsonPropertyName("mobile")]
+	[JsonPropertyName("mobilenumber")]
 	public string? Mobile { get; init; }
 
 	/// <summary>
@@ -110,7 +110,7 @@ public record User
 	/// <summary>
 	/// Whether this user is an important user
 	/// </summary>
-	[JsonPropertyName("isimportantuser")]
+	[JsonPropertyName("isimportantcontact")]
 	public bool IsImportantUser { get; init; }
 
 	/// <summary>

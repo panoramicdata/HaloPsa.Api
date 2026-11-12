@@ -33,7 +33,7 @@ public class SitesApiWrapperTests
 			PageSize = 100,
 			ClientId = 5,
 			IncludeInactive = true,
-			IncludeCustomFields = "518,519",
+			IncludeCustomFields = "901,902",
 			Search = "london"
 		};
 
@@ -41,7 +41,7 @@ public class SitesApiWrapperTests
 
 		_ = handler.LastRequest.AbsolutePath.Should().Be("/api/Site");
 		_ = handler.LastRequest.Query.Should().Be(
-			"?count=10&pageinate=True&page_no=2&page_size=100&client_id=5&includeinactive=True&include_custom_fields=518%2C519&search=london");
+			"?count=10&pageinate=True&page_no=2&page_size=100&client_id=5&includeinactive=True&include_custom_fields=901%2C902&search=london");
 	}
 
 	[Fact]
@@ -127,14 +127,14 @@ public class SitesApiWrapperTests
 	{
 		var handler = new CapturingHandler(SimulatedHalo(totalSites: 2));
 		var wrapper = new SitesApiWrapper(CreateClient<ISitesApi>(handler));
-		var filter = new SiteFilter { ClientId = 5, PageSize = 10, Paginate = false, PageNo = 9, IncludeCustomFields = "518" };
+		var filter = new SiteFilter { ClientId = 5, PageSize = 10, Paginate = false, PageNo = 9, IncludeCustomFields = "901" };
 
 		var sites = await wrapper.GetAllPagedAsync(filter, CancellationToken.None);
 
 		_ = sites.Should().HaveCount(2);
 		_ = handler.Requests.Select(r => r.Query).Should().Equal(
-			"?pageinate=True&page_no=1&page_size=10&client_id=5&include_custom_fields=518",
-			"?pageinate=True&page_no=2&page_size=10&client_id=5&include_custom_fields=518");
+			"?pageinate=True&page_no=1&page_size=10&client_id=5&include_custom_fields=901",
+			"?pageinate=True&page_no=2&page_size=10&client_id=5&include_custom_fields=901");
 	}
 
 	[Fact]

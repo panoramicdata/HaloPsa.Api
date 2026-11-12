@@ -14,7 +14,7 @@ namespace HaloPsa.Api.Test.Infrastructure;
 public class UsersApiWrapperTests
 {
 	private const string Jane = """
-		{"id":42,"name":"Jane Smith","emailaddress":"","site":"Head Office","department":"Sales","client_id":21,"client_name":"Example Ltd",
+		{"id":42,"name":"Jane Smith","emailaddress":"","site_name":"Head Office","department":"Sales","client_id":21,"client_name":"Example Ltd",
 		 "site_id":3.0,"login":"jane.smith@example.com","firstname":"Jane","surname":"Smith","email2":"jane@example.org","email3":null,"linked_agent_id":-1}
 		""";
 
@@ -37,6 +37,20 @@ public class UsersApiWrapperTests
 		_ = user.Department.Should().Be("Sales");
 		_ = user.ClientId.Should().Be(21);
 		_ = user.ClientName.Should().Be("Example Ltd");
+	}
+
+	[Fact]
+	public async Task GetByIdAsync_ReadsTheKeysHalosUsersSchemaDefines()
+	{
+		var wrapper = CreateWrapper(new CapturingHandler(
+			"""{"id":42,"name":"Jane Smith","site_name":"Head Office","phonenumber":"020 7946 0000","mobilenumber":"07700 900123","isimportantcontact":true}"""));
+
+		var user = await wrapper.GetByIdAsync(42, CancellationToken.None);
+
+		_ = user.Site.Should().Be("Head Office");
+		_ = user.Telephone.Should().Be("020 7946 0000");
+		_ = user.Mobile.Should().Be("07700 900123");
+		_ = user.IsImportantUser.Should().BeTrue();
 	}
 
 	[Fact]

@@ -21,7 +21,7 @@ public class TicketCustomFieldsTests
 			  "user_id": 22,
 			  "customfields": [
 			    {
-			      "id": 518,
+			      "id": 901,
 			      "name": "CFAppPortalCiscoSecurityAdvisoryId",
 			      "value": "cisco-sa-aaa-Yx47ZT8Q",
 			      "display": "cisco-sa-aaa-Yx47ZT8Q",
@@ -40,7 +40,7 @@ public class TicketCustomFieldsTests
 
 		_ = ticket.Should().NotBeNull();
 		var field = ticket!.CustomFields.Should().ContainSingle().Subject;
-		_ = field.Id.Should().Be(518);
+		_ = field.Id.Should().Be(901);
 		_ = field.Name.Should().Be("CFAppPortalCiscoSecurityAdvisoryId");
 		_ = field.Label.Should().Be("AppPortal_CiscoSecurityAdvisoryId");
 		_ = field.Value!.Value.GetString().Should().Be("cisco-sa-aaa-Yx47ZT8Q");
@@ -76,13 +76,13 @@ public class TicketCustomFieldsTests
 			  "client_id": 1,
 			  "user_id": 1,
 			  "timetaken": 1.25,
-			  "customfields": [ { "id": 518, "name": "CFRef", "value": "ABC" } ]
+			  "customfields": [ { "id": 901, "name": "CFRef", "value": "ABC" } ]
 			}
 			""";
 
 		var ticket = JsonSerializer.Deserialize<Ticket>(json);
 
-		_ = ticket!.CustomFields.Should().ContainSingle().Which.Id.Should().Be(518);
+		_ = ticket!.CustomFields.Should().ContainSingle().Which.Id.Should().Be(901);
 		_ = ticket.AdditionalProperties.Should().NotBeNull();
 		_ = ticket.AdditionalProperties!.Keys.Should().Contain("timetaken").And.NotContain("customfields");
 	}

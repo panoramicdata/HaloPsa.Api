@@ -18,7 +18,7 @@ public class CustomFieldValueTests
 			  "name": "Head Office",
 			  "client_id": 21.0,
 			  "customfields": [
-			    {"id":519,"name":"CFAutotaskSiteID","label":"Autotask ID","value":"2187","display":"2187","type":0,"usage":1,"extra":{"a":[1,2]}},
+			    {"id":902,"name":"CFAutotaskSiteID","label":"Autotask ID","value":"2187","display":"2187","type":0,"usage":1,"extra":{"a":[1,2]}},
 			    {"id":520.0,"name":"CFNumber","label":"A number","value":42,"display":"42"}
 			  ]
 			}
@@ -30,7 +30,7 @@ public class CustomFieldValueTests
 		_ = site!.CustomFields.Should().HaveCount(2);
 
 		var first = site.CustomFields![0];
-		_ = first.Id.Should().Be(519);
+		_ = first.Id.Should().Be(902);
 		_ = first.Name.Should().Be("CFAutotaskSiteID");
 		_ = first.Label.Should().Be("Autotask ID");
 		_ = first.Value!.Value.GetString().Should().Be("2187");

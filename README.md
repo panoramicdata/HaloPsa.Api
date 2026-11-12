@@ -132,17 +132,6 @@ var users = await client.Psa.Users.GetAllAsync(userFilter, cancellationToken);
 // Get user details
 var user = await client.Psa.Users.GetByIdAsync(123, cancellationToken);
 Console.WriteLine($"User: {user.Name} ({user.EmailAddress})");
-
-// Create a new user
-var newUser = new CreateUserRequest
-{
-    Name = "Jane Smith",
-    EmailAddress = "jane.smith@example.com",
-    SiteId = 1,
-    IsActive = true
-};
-
-var createdUser = await client.Psa.Users.CreateAsync(newUser, cancellationToken);
 ```
 
 #### Working with Clients
@@ -160,7 +149,6 @@ var clients = await client.Psa.Clients.GetAllPagedAsync(clientFilter, cancellati
 // Get client with additional details
 var clientDetails = await client.Psa.Clients.GetByIdAsync(123, includeDetails: true, cancellationToken);
 Console.WriteLine($"Client: {clientDetails.Name}");
-Console.WriteLine($"Contact: {clientDetails.MainContact?.Name}");
 ```
 
 ### 3. Advanced Configuration

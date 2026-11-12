@@ -81,20 +81,57 @@ public class RetryHandlerTests
 		_ = response.StatusCode.Should().Be(expectedStatus);
 	}
 
-	private static RetryHandler CreateRetryHandler(SequencingHandler stub)
+	[Fact]
+	public async Task Post_RetriedOnTooManyRequestsThenAnotherError_IsNotLoggedAsASuccess()
+	{
+		var stub = new SequencingHandler(HttpStatusCode.TooManyRequests, HttpStatusCode.InternalServerError);
+		var logger = new ListLogger();
+
+		using var response = await SendThroughRetryHandlerAsync(stub, HttpMethod.Post, TestContext.Current.CancellationToken, logger);
+
+		_ = response.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
+		_ = logger.Messages.Should().NotContain(message => message.Contains("succeeded", StringComparison.Ordinal));
+	}
+
+	[Fact]
+	public async Task Post_RetriedOnTooManyRequestsThenOk_IsLoggedAsASuccessOnTheSecondAttempt()
+	{
+		var stub = new SequencingHandler(HttpStatusCode.TooManyRequests, HttpStatusCode.OK);
+		var logger = new ListLogger();
+
+		using var response = await SendThroughRetryHandlerAsync(stub, HttpMethod.Post, TestContext.Current.CancellationToken, logger);
+
+		_ = logger.Messages.Should().ContainSingle(message => message.Contains("succeeded on attempt 2", StringComparison.Ordinal));
+	}
+
+	private sealed class ListLogger : Microsoft.Extensions.Logging.ILogger
+	{
+		public List<string> Messages { get; } = [];
+
+		public IDisposable? BeginScope<TState>(TState state)
+			where TState : notnull
+			=> null;
+
+		public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+		public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+			=> Messages.Add(formatter(state, exception));
+	}
+
+	private static RetryHandler CreateRetryHandler(SequencingHandler stub, Microsoft.Extensions.Logging.ILogger? logger = null)
 		=> new(
 			maxRetryAttempts: 2,
 			retryDelay: TimeSpan.FromMilliseconds(1),
 			useExponentialBackoff: false,
 			maxRetryDelay: TimeSpan.FromMilliseconds(1),
-			logger: null)
+			logger: logger)
 		{
 			InnerHandler = stub
 		};
 
-	private static async Task<HttpResponseMessage> SendThroughRetryHandlerAsync(SequencingHandler stub, HttpMethod method, CancellationToken cancellationToken)
+	private static async Task<HttpResponseMessage> SendThroughRetryHandlerAsync(SequencingHandler stub, HttpMethod method, CancellationToken cancellationToken, Microsoft.Extensions.Logging.ILogger? logger = null)
 	{
-		using var handler = CreateRetryHandler(stub);
+		using var handler = CreateRetryHandler(stub, logger);
 		using var invoker = new HttpMessageInvoker(handler, disposeHandler: false);
 		using var request = new HttpRequestMessage(method, _url);
 
