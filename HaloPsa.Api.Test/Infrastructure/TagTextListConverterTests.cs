@@ -1,8 +1,8 @@
 using AwesomeAssertions;
 using HaloPsa.Api.Converters;
 using HaloPsa.Api.Models.Tickets;
-using System.Text;
 using System.Text.Json;
+using static HaloPsa.Api.Test.Infrastructure.ListConverterTestSupport;
 
 namespace HaloPsa.Api.Test.Infrastructure;
 
@@ -14,23 +14,11 @@ public class TagTextListConverterTests
 {
 	private static readonly JsonSerializerOptions _options = new() { Converters = { new TagTextListConverter() } };
 
-	// Reads through the converter directly: the serializer never calls it for a JSON null.
-	private static IReadOnlyList<string> Read(string json)
-	{
-		var reader = new Utf8JsonReader(Encoding.UTF8.GetBytes(json));
-		_ = reader.Read();
-
-		return new TagTextListConverter().Read(ref reader, typeof(IReadOnlyList<string>), _options);
-	}
+	private static IReadOnlyList<string> Read(string json) => ReadWith(new TagTextListConverter(), _options, json);
 
 	[Fact]
 	public void Write_ThenRead_RoundTrips()
-	{
-		var json = JsonSerializer.Serialize<IReadOnlyList<string>>(["b", "a", "c d"], _options);
-
-		_ = json.Should().Be("""[{"text":"b"},{"text":"a"},{"text":"c d"}]""");
-		_ = Read(json).Should().Equal("b", "a", "c d");
-	}
+		=> AssertRoundTrips<string>(Read, _options, ["b", "a", "c d"], """[{"text":"b"},{"text":"a"},{"text":"c d"}]""");
 
 	[Fact]
 	public void Read_WhenTheArrayIsEmpty_ReturnsNoTags()
@@ -42,11 +30,7 @@ public class TagTextListConverterTests
 	[InlineData("\"text\"", "String")]
 	[InlineData("5", "Number")]
 	public void Read_WhenTheTokenIsNotAnArray_Throws(string json, string token)
-	{
-		var act = () => Read(json);
-
-		_ = act.Should().Throw<JsonException>().WithMessage($"Expected an array of tag objects, but found {token}.");
-	}
+		=> AssertReadThrows(Read, json, $"Expected an array of tag objects, but found {token}.");
 
 	[Theory]
 	[InlineData("[1]")]
@@ -60,11 +44,7 @@ public class TagTextListConverterTests
 	[InlineData("""[{"text":null}]""")]
 	[InlineData("""[{"text":["a"]}]""")]
 	public void Read_WhenAnItemIsNotAnObjectWithAStringText_Throws(string json)
-	{
-		var act = () => Read(json);
-
-		_ = act.Should().Throw<JsonException>().WithMessage("Expected an object with a string \"text\".");
-	}
+		=> AssertReadThrows(Read, json, "Expected an object with a string \"text\".");
 
 	[Fact]
 	public void Deserialize_ACreateRequestWithTheTagsFirst_ReadsTheTagsAndTheLaterProperties()

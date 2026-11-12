@@ -33,150 +33,94 @@ public class TicketStatusAndAssignWireTests
 		return body[0];
 	}
 
-	[Fact]
-	public async Task CloseAsync_SendsTheClosedStatus()
+	private static async Task AssertSendsAsync(Func<TicketsApiWrapper, Task> call, params (string Name, object Value)[] expected)
 	{
 		var (wrapper, handler) = Create();
 
-		_ = await wrapper.CloseAsync(901, 31, CancellationToken.None);
+		await call(wrapper);
 
 		var ticket = SentTicket(handler);
-		_ = ticket.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo("id", "status_id");
+		_ = ticket.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo(["id", .. expected.Select(e => e.Name)]);
 		_ = ticket.GetProperty("id").GetInt32().Should().Be(901);
-		_ = ticket.GetProperty("status_id").GetInt32().Should().Be(31);
+
+		foreach (var (name, value) in expected)
+		{
+			var property = ticket.GetProperty(name);
+			_ = property.ToString().Should().Be(value.ToString());
+		}
 	}
 
-	[Fact]
-	public async Task CloseAsync_WithANote_SendsTheClosureNote()
+	private static async Task AssertRefusedAsync<TException>(string paramName, params Func<TicketsApiWrapper, Task>[] calls)
+		where TException : ArgumentException
 	{
 		var (wrapper, handler) = Create();
 
-		_ = await wrapper.CloseAsync(901, 31, "Fixed", CancellationToken.None);
+		foreach (var call in calls)
+		{
+			var thrown = await FluentActions.Awaiting(() => call(wrapper)).Should().ThrowAsync<TException>();
+			_ = thrown.Which.ParamName.Should().Be(paramName);
+		}
 
-		var ticket = SentTicket(handler);
-		_ = ticket.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo("id", "status_id", "closure_note");
-		_ = ticket.GetProperty("id").GetInt32().Should().Be(901);
-		_ = ticket.GetProperty("status_id").GetInt32().Should().Be(31);
-		_ = ticket.GetProperty("closure_note").GetString().Should().Be("Fixed");
+		_ = handler.Requests.Should().BeEmpty();
 	}
 
 	[Fact]
-	public async Task ReopenAsync_SendsTheOpenStatus()
-	{
-		var (wrapper, handler) = Create();
-
-		_ = await wrapper.ReopenAsync(901, 32, CancellationToken.None);
-
-		var ticket = SentTicket(handler);
-		_ = ticket.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo("id", "status_id");
-		_ = ticket.GetProperty("id").GetInt32().Should().Be(901);
-		_ = ticket.GetProperty("status_id").GetInt32().Should().Be(32);
-	}
+	public Task CloseAsync_SendsTheClosedStatus()
+		=> AssertSendsAsync(w => w.CloseAsync(901, 31, CancellationToken.None), ("status_id", 31));
 
 	[Fact]
-	public async Task AssignAsync_SendsTheAgent()
-	{
-		var (wrapper, handler) = Create();
-
-		_ = await wrapper.AssignAsync(901, 5, CancellationToken.None);
-
-		var ticket = SentTicket(handler);
-		_ = ticket.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo("id", "agent_id");
-		_ = ticket.GetProperty("id").GetInt32().Should().Be(901);
-		_ = ticket.GetProperty("agent_id").GetInt32().Should().Be(5);
-	}
+	public Task CloseAsync_WithANote_SendsTheClosureNote()
+		=> AssertSendsAsync(w => w.CloseAsync(901, 31, "Fixed", CancellationToken.None), ("status_id", 31), ("closure_note", "Fixed"));
 
 	[Fact]
-	public async Task AssignAsync_WithATeam_SendsTheAgentAndTeam()
-	{
-		var (wrapper, handler) = Create();
+	public Task ReopenAsync_SendsTheOpenStatus()
+		=> AssertSendsAsync(w => w.ReopenAsync(901, 32, CancellationToken.None), ("status_id", 32));
 
-		_ = await wrapper.AssignAsync(901, 5, 6, CancellationToken.None);
+	[Fact]
+	public Task AssignAsync_SendsTheAgent()
+		=> AssertSendsAsync(w => w.AssignAsync(901, 5, CancellationToken.None), ("agent_id", 5));
 
-		var ticket = SentTicket(handler);
-		_ = ticket.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo("id", "agent_id", "team_id");
-		_ = ticket.GetProperty("id").GetInt32().Should().Be(901);
-		_ = ticket.GetProperty("agent_id").GetInt32().Should().Be(5);
-		_ = ticket.GetProperty("team_id").GetInt32().Should().Be(6);
-	}
+	[Fact]
+	public Task AssignAsync_WithATeam_SendsTheAgentAndTeam()
+		=> AssertSendsAsync(w => w.AssignAsync(901, 5, 6, CancellationToken.None), ("agent_id", 5), ("team_id", 6));
 
 	[Theory]
 	[InlineData(0)]
 	[InlineData(-1)]
-	public async Task CloseAsync_WhenTheStatusIdIsNotPositive_RefusesBeforeSending(int closedStatusId)
-	{
-		var (wrapper, handler) = Create();
-
-		var withoutNote = async () => await wrapper.CloseAsync(901, closedStatusId, CancellationToken.None);
-		var withNote = async () => await wrapper.CloseAsync(901, closedStatusId, "Fixed", CancellationToken.None);
-
-		_ = (await withoutNote.Should().ThrowAsync<ArgumentOutOfRangeException>()).Which.ParamName.Should().Be("closedStatusId");
-		_ = (await withNote.Should().ThrowAsync<ArgumentOutOfRangeException>()).Which.ParamName.Should().Be("closedStatusId");
-		_ = handler.Requests.Should().BeEmpty();
-	}
+	public Task CloseAsync_WhenTheStatusIdIsNotPositive_RefusesBeforeSending(int closedStatusId)
+		=> AssertRefusedAsync<ArgumentOutOfRangeException>(
+			"closedStatusId",
+			w => w.CloseAsync(901, closedStatusId, CancellationToken.None),
+			w => w.CloseAsync(901, closedStatusId, "Fixed", CancellationToken.None));
 
 	[Theory]
 	[InlineData(0)]
 	[InlineData(-1)]
-	public async Task ReopenAsync_WhenTheStatusIdIsNotPositive_RefusesBeforeSending(int openStatusId)
-	{
-		var (wrapper, handler) = Create();
-
-		var act = async () => await wrapper.ReopenAsync(901, openStatusId, CancellationToken.None);
-
-		_ = (await act.Should().ThrowAsync<ArgumentOutOfRangeException>()).Which.ParamName.Should().Be("openStatusId");
-		_ = handler.Requests.Should().BeEmpty();
-	}
+	public Task ReopenAsync_WhenTheStatusIdIsNotPositive_RefusesBeforeSending(int openStatusId)
+		=> AssertRefusedAsync<ArgumentOutOfRangeException>("openStatusId", w => w.ReopenAsync(901, openStatusId, CancellationToken.None));
 
 	[Theory]
 	[InlineData(0)]
 	[InlineData(-1)]
-	public async Task AssignAsync_WhenTheAgentIdIsNotPositive_RefusesBeforeSending(int agentId)
-	{
-		var (wrapper, handler) = Create();
-
-		var withoutTeam = async () => await wrapper.AssignAsync(901, agentId, CancellationToken.None);
-		var withTeam = async () => await wrapper.AssignAsync(901, agentId, 6, CancellationToken.None);
-
-		_ = (await withoutTeam.Should().ThrowAsync<ArgumentOutOfRangeException>()).Which.ParamName.Should().Be("agentId");
-		_ = (await withTeam.Should().ThrowAsync<ArgumentOutOfRangeException>()).Which.ParamName.Should().Be("agentId");
-		_ = handler.Requests.Should().BeEmpty();
-	}
+	public Task AssignAsync_WhenTheAgentIdIsNotPositive_RefusesBeforeSending(int agentId)
+		=> AssertRefusedAsync<ArgumentOutOfRangeException>(
+			"agentId",
+			w => w.AssignAsync(901, agentId, CancellationToken.None),
+			w => w.AssignAsync(901, agentId, 6, CancellationToken.None));
 
 	[Theory]
 	[InlineData(0)]
 	[InlineData(-1)]
-	public async Task AssignAsync_WhenTheTeamIdIsNotPositive_RefusesBeforeSending(int teamId)
-	{
-		var (wrapper, handler) = Create();
-
-		var act = async () => await wrapper.AssignAsync(901, 5, teamId, CancellationToken.None);
-
-		_ = (await act.Should().ThrowAsync<ArgumentOutOfRangeException>()).Which.ParamName.Should().Be("teamId");
-		_ = handler.Requests.Should().BeEmpty();
-	}
+	public Task AssignAsync_WhenTheTeamIdIsNotPositive_RefusesBeforeSending(int teamId)
+		=> AssertRefusedAsync<ArgumentOutOfRangeException>("teamId", w => w.AssignAsync(901, 5, teamId, CancellationToken.None));
 
 	[Theory]
 	[InlineData("")]
 	[InlineData("   ")]
-	public async Task CloseAsync_WhenTheNoteIsBlank_RefusesBeforeSending(string note)
-	{
-		var (wrapper, handler) = Create();
-
-		var act = async () => await wrapper.CloseAsync(901, 31, note, CancellationToken.None);
-
-		_ = (await act.Should().ThrowAsync<ArgumentException>()).Which.ParamName.Should().Be("closureNote");
-		_ = handler.Requests.Should().BeEmpty();
-	}
+	public Task CloseAsync_WhenTheNoteIsBlank_RefusesBeforeSending(string note)
+		=> AssertRefusedAsync<ArgumentException>("closureNote", w => w.CloseAsync(901, 31, note, CancellationToken.None));
 
 	[Fact]
-	public async Task CloseAsync_WhenTheNoteIsNull_RefusesBeforeSending()
-	{
-		var (wrapper, handler) = Create();
-
-		var act = async () => await wrapper.CloseAsync(901, 31, null!, CancellationToken.None);
-
-		_ = (await act.Should().ThrowAsync<ArgumentException>()).Which.ParamName.Should().Be("closureNote");
-		_ = handler.Requests.Should().BeEmpty();
-	}
+	public Task CloseAsync_WhenTheNoteIsNull_RefusesBeforeSending()
+		=> AssertRefusedAsync<ArgumentException>("closureNote", w => w.CloseAsync(901, 31, null!, CancellationToken.None));
 }

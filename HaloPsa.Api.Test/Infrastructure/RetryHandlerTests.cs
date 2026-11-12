@@ -11,26 +11,12 @@ public class RetryHandlerTests
 	private const string _url = "https://example.invalid/api/Tickets";
 
 	[Fact]
-	public async Task Post_IsNotRetriedOnAServerError()
-	{
-		var stub = new SequencingHandler(HttpStatusCode.ServiceUnavailable, HttpStatusCode.OK);
-
-		using var response = await SendThroughRetryHandlerAsync(stub, HttpMethod.Post, TestContext.Current.CancellationToken);
-
-		_ = stub.CallCount.Should().Be(1);
-		_ = response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
-	}
+	public Task Post_IsNotRetriedOnAServerError()
+		=> AssertAttemptsAsync(HttpMethod.Post, HttpStatusCode.ServiceUnavailable, expectedCalls: 1, expectedStatus: HttpStatusCode.ServiceUnavailable);
 
 	[Fact]
-	public async Task Post_IsNotRetriedOnARequestTimeoutStatus()
-	{
-		var stub = new SequencingHandler(HttpStatusCode.RequestTimeout, HttpStatusCode.OK);
-
-		using var response = await SendThroughRetryHandlerAsync(stub, HttpMethod.Post, TestContext.Current.CancellationToken);
-
-		_ = stub.CallCount.Should().Be(1);
-		_ = response.StatusCode.Should().Be(HttpStatusCode.RequestTimeout);
-	}
+	public Task Post_IsNotRetriedOnARequestTimeoutStatus()
+		=> AssertAttemptsAsync(HttpMethod.Post, HttpStatusCode.RequestTimeout, expectedCalls: 1, expectedStatus: HttpStatusCode.RequestTimeout);
 
 	[Fact]
 	public async Task Post_IsNotRetriedOnATransportError()
@@ -44,15 +30,8 @@ public class RetryHandlerTests
 	}
 
 	[Fact]
-	public async Task Post_IsRetriedOnTooManyRequests()
-	{
-		var stub = new SequencingHandler(HttpStatusCode.TooManyRequests, HttpStatusCode.OK);
-
-		using var response = await SendThroughRetryHandlerAsync(stub, HttpMethod.Post, TestContext.Current.CancellationToken);
-
-		_ = stub.CallCount.Should().Be(2);
-		_ = response.StatusCode.Should().Be(HttpStatusCode.OK);
-	}
+	public Task Post_IsRetriedOnTooManyRequests()
+		=> AssertAttemptsAsync(HttpMethod.Post, HttpStatusCode.TooManyRequests, expectedCalls: 2, expectedStatus: HttpStatusCode.OK);
 
 	[Fact]
 	public async Task Post_RetriedOnTooManyRequests_ResendsTheSameBody()
@@ -74,26 +53,12 @@ public class RetryHandlerTests
 	}
 
 	[Fact]
-	public async Task Get_IsStillRetriedOnAServerError()
-	{
-		var stub = new SequencingHandler(HttpStatusCode.ServiceUnavailable, HttpStatusCode.OK);
-
-		using var response = await SendThroughRetryHandlerAsync(stub, HttpMethod.Get, TestContext.Current.CancellationToken);
-
-		_ = stub.CallCount.Should().Be(2);
-		_ = response.StatusCode.Should().Be(HttpStatusCode.OK);
-	}
+	public Task Get_IsStillRetriedOnAServerError()
+		=> AssertAttemptsAsync(HttpMethod.Get, HttpStatusCode.ServiceUnavailable, expectedCalls: 2, expectedStatus: HttpStatusCode.OK);
 
 	[Fact]
-	public async Task Delete_IsStillRetriedOnAServerError()
-	{
-		var stub = new SequencingHandler(HttpStatusCode.ServiceUnavailable, HttpStatusCode.OK);
-
-		using var response = await SendThroughRetryHandlerAsync(stub, HttpMethod.Delete, TestContext.Current.CancellationToken);
-
-		_ = stub.CallCount.Should().Be(2);
-		_ = response.StatusCode.Should().Be(HttpStatusCode.OK);
-	}
+	public Task Delete_IsStillRetriedOnAServerError()
+		=> AssertAttemptsAsync(HttpMethod.Delete, HttpStatusCode.ServiceUnavailable, expectedCalls: 2, expectedStatus: HttpStatusCode.OK);
 
 	[Fact]
 	public async Task NoRequestIsRetriedOnceTheCallersTokenIsCancelled()
@@ -104,6 +69,16 @@ public class RetryHandlerTests
 
 		_ = await act.Should().ThrowAsync<TaskCanceledException>();
 		_ = stub.CallCount.Should().Be(1);
+	}
+
+	private static async Task AssertAttemptsAsync(HttpMethod method, HttpStatusCode firstOutcome, int expectedCalls, HttpStatusCode expectedStatus)
+	{
+		var stub = new SequencingHandler(firstOutcome, HttpStatusCode.OK);
+
+		using var response = await SendThroughRetryHandlerAsync(stub, method, TestContext.Current.CancellationToken);
+
+		_ = stub.CallCount.Should().Be(expectedCalls);
+		_ = response.StatusCode.Should().Be(expectedStatus);
 	}
 
 	private static RetryHandler CreateRetryHandler(SequencingHandler stub)

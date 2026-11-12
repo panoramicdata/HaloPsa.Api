@@ -1,4 +1,5 @@
 using AwesomeAssertions;
+using AwesomeAssertions.Specialized;
 using HaloPsa.Api.Exceptions;
 using HaloPsa.Api.Infrastructure;
 using HaloPsa.Api.Models.Tickets;
@@ -21,12 +22,7 @@ public class ApiErrorParserTests
 	[Fact]
 	public async Task CreateAsync_WhenHaloAnswers400WithAStringBody_RaisesTheBadRequestErrorWithHalosMessage()
 	{
-		var handler = new CapturingHandler(_stringBody) { StatusCode = HttpStatusCode.BadRequest };
-		var psa = new PsaApi(handler.CreateClient(), readOnly: false);
-
-		var act = async () => await psa.Tickets.CreateAsync(_validRequest, CancellationToken.None);
-
-		var thrown = (await act.Should().ThrowExactlyAsync<HaloBadRequestException>()).WithMessage("*Category is mandatory*").Which;
+		var thrown = (await CreateExpectingAsync<HaloBadRequestException>(_stringBody, HttpStatusCode.BadRequest)).WithMessage("*Category is mandatory*").Which;
 		_ = thrown.StatusCode.Should().Be(400);
 		_ = thrown.Message.Should().NotContain("\n");
 		_ = thrown.Details.Should().ContainKey("message").WhoseValue.Should().Be("Category is mandatory");
@@ -34,24 +30,12 @@ public class ApiErrorParserTests
 
 	[Fact]
 	public async Task CreateAsync_WhenHaloAnswers400WithABlankStringBody_KeepsTheReasonPhrase()
-	{
-		var handler = new CapturingHandler("\"  \\n\"") { StatusCode = HttpStatusCode.BadRequest };
-		var psa = new PsaApi(handler.CreateClient(), readOnly: false);
-
-		var act = async () => await psa.Tickets.CreateAsync(_validRequest, CancellationToken.None);
-
-		_ = (await act.Should().ThrowExactlyAsync<HaloBadRequestException>()).WithMessage("Bad request: Bad Request");
-	}
+		=> _ = (await CreateExpectingAsync<HaloBadRequestException>("\"  \\n\"", HttpStatusCode.BadRequest)).WithMessage("Bad request: Bad Request");
 
 	[Fact]
 	public async Task CreateAsync_WhenHaloAnswers400WithAStringBodyThatCannotBeDecoded_RaisesTheBadRequestError()
 	{
-		var handler = new CapturingHandler("\"\\ud800\"") { StatusCode = HttpStatusCode.BadRequest };
-		var psa = new PsaApi(handler.CreateClient(), readOnly: false);
-
-		var act = async () => await psa.Tickets.CreateAsync(_validRequest, CancellationToken.None);
-
-		var thrown = (await act.Should().ThrowExactlyAsync<HaloBadRequestException>()).WithMessage("Bad request: Bad Request").Which;
+		var thrown = (await CreateExpectingAsync<HaloBadRequestException>("\"\\ud800\"", HttpStatusCode.BadRequest)).WithMessage("Bad request: Bad Request").Which;
 		_ = thrown.StatusCode.Should().Be(400);
 		_ = thrown.Details.Should().ContainKey("rawContent");
 	}
@@ -59,24 +43,14 @@ public class ApiErrorParserTests
 	[Fact]
 	public async Task CreateAsync_WhenHaloAnswers500WithAnArrayBody_RaisesTheServerError()
 	{
-		var handler = new CapturingHandler("[]") { StatusCode = HttpStatusCode.InternalServerError };
-		var psa = new PsaApi(handler.CreateClient(), readOnly: false);
-
-		var act = async () => await psa.Tickets.CreateAsync(_validRequest, CancellationToken.None);
-
-		var thrown = (await act.Should().ThrowExactlyAsync<HaloServerException>()).Which;
+		var thrown = (await CreateExpectingAsync<HaloServerException>("[]", HttpStatusCode.InternalServerError)).Which;
 		_ = thrown.StatusCode.Should().Be(500);
 	}
 
 	[Fact]
 	public async Task CreateAsync_WhenHaloAnswers400WithAnObjectBody_KeepsTheReasonPhraseAndTheDetails()
 	{
-		var handler = new CapturingHandler("""{"message":"Category is mandatory","errors":["a","b"]}""") { StatusCode = HttpStatusCode.BadRequest };
-		var psa = new PsaApi(handler.CreateClient(), readOnly: false);
-
-		var act = async () => await psa.Tickets.CreateAsync(_validRequest, CancellationToken.None);
-
-		var thrown = (await act.Should().ThrowExactlyAsync<HaloBadRequestException>()).WithMessage("Bad request: Bad Request").Which;
+		var thrown = (await CreateExpectingAsync<HaloBadRequestException>("""{"message":"Category is mandatory","errors":["a","b"]}""", HttpStatusCode.BadRequest)).WithMessage("Bad request: Bad Request").Which;
 		_ = thrown.ValidationErrors.Should().Equal("a", "b");
 		_ = thrown.Details.Should().ContainKey("message").WhoseValue.Should().Be("Category is mandatory");
 	}
@@ -130,12 +104,7 @@ public class ApiErrorParserTests
 	[InlineData("true")]
 	[InlineData("null")]
 	public void ParseJsonContent_WhenTheRootIsNeitherAnObjectNorAString_KeepsTheRawContent(string body)
-	{
-		var (details, validationErrors) = ApiErrorParser.ParseJsonContent(body);
-
-		_ = details.Should().Equal(new Dictionary<string, object?> { ["rawContent"] = body });
-		_ = validationErrors.Should().BeNull();
-	}
+		=> AssertRawContent(body);
 
 	[Fact]
 	public void ParseJsonContent_WhenTheRootIsAnObject_ReadsItsPropertiesAndErrors()
@@ -150,10 +119,24 @@ public class ApiErrorParserTests
 
 	[Fact]
 	public void ParseJsonContent_WhenTheBodyIsNotJson_KeepsTheRawContent()
-	{
-		var (details, validationErrors) = ApiErrorParser.ParseJsonContent("<html>Gateway page</html>");
+		=> AssertRawContent("<html>Gateway page</html>");
 
-		_ = details.Should().Equal(new Dictionary<string, object?> { ["rawContent"] = "<html>Gateway page</html>" });
+	private static async Task<ExceptionAssertions<TException>> CreateExpectingAsync<TException>(string body, HttpStatusCode status)
+		where TException : Exception
+	{
+		var handler = new CapturingHandler(body) { StatusCode = status };
+		var psa = new PsaApi(handler.CreateClient(), readOnly: false);
+
+		var act = async () => await psa.Tickets.CreateAsync(_validRequest, CancellationToken.None);
+
+		return await act.Should().ThrowExactlyAsync<TException>();
+	}
+
+	private static void AssertRawContent(string body)
+	{
+		var (details, validationErrors) = ApiErrorParser.ParseJsonContent(body);
+
+		_ = details.Should().Equal(new Dictionary<string, object?> { ["rawContent"] = body });
 		_ = validationErrors.Should().BeNull();
 	}
 

@@ -3,16 +3,10 @@ using System.Text.Json.Serialization;
 namespace HaloPsa.Api.Models.Clients;
 
 /// <summary>
-/// Request model for creating a new client
+/// Properties shared by the client create and update requests
 /// </summary>
-public record CreateClientRequest
+public abstract record ClientRequestBase
 {
-	/// <summary>
-	/// The client name (required)
-	/// </summary>
-	[JsonPropertyName("name")]
-	public required string Name { get; init; }
-
 	/// <summary>
 	/// The client website
 	/// </summary>
@@ -60,77 +54,45 @@ public record CreateClientRequest
 	/// </summary>
 	[JsonPropertyName("notes")]
 	public string? Notes { get; init; }
+}
+
+/// <summary>
+/// Request model for creating a new client
+/// </summary>
+public record CreateClientRequest : ClientRequestBase
+{
+	/// <summary>
+	/// The client name (required)
+	/// </summary>
+	[JsonPropertyName("name")]
+	[JsonPropertyOrder(-1)]
+	public required string Name { get; init; }
 
 	/// <summary>
 	/// Whether the client is inactive
 	/// </summary>
 	[JsonPropertyName("inactive")]
+	[JsonPropertyOrder(1)]
 	public bool IsInactive { get; init; }
 }
 
 /// <summary>
 /// Request model for updating an existing client
 /// </summary>
-public record UpdateClientRequest
+public record UpdateClientRequest : ClientRequestBase
 {
 	/// <summary>
 	/// The client name
 	/// </summary>
 	[JsonPropertyName("name")]
+	[JsonPropertyOrder(-1)]
 	public string? Name { get; init; }
-
-	/// <summary>
-	/// The client website
-	/// </summary>
-	[JsonPropertyName("website")]
-	public string? Website { get; init; }
-
-	/// <summary>
-	/// The client's main telephone number
-	/// </summary>
-	[JsonPropertyName("telephone")]
-	public string? Telephone { get; init; }
-
-	/// <summary>
-	/// The client's fax number
-	/// </summary>
-	[JsonPropertyName("fax")]
-	public string? Fax { get; init; }
-
-	/// <summary>
-	/// The client's address
-	/// </summary>
-	[JsonPropertyName("address")]
-	public string? Address { get; init; }
-
-	/// <summary>
-	/// The client's city
-	/// </summary>
-	[JsonPropertyName("city")]
-	public string? City { get; init; }
-
-	/// <summary>
-	/// The client's postal code
-	/// </summary>
-	[JsonPropertyName("postcode")]
-	public string? PostCode { get; init; }
-
-	/// <summary>
-	/// The client's country
-	/// </summary>
-	[JsonPropertyName("country")]
-	public string? Country { get; init; }
-
-	/// <summary>
-	/// Additional notes about the client
-	/// </summary>
-	[JsonPropertyName("notes")]
-	public string? Notes { get; init; }
 
 	/// <summary>
 	/// Whether the client is inactive
 	/// </summary>
 	[JsonPropertyName("inactive")]
+	[JsonPropertyOrder(1)]
 	public bool? IsInactive { get; init; }
 }
 

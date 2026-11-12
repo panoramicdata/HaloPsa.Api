@@ -12,47 +12,30 @@ public class HaloClientInfrastructureTests(IntegrationTestFixture fixture)
 
 	[Fact]
 	public void HaloClient_WithValidOptions_CanBeInstantiated()
-	{
-		// Arrange
-		var options = BaseOptions(Account, ClientId, ClientSecret);
-
-		// Act
-		using var client = new HaloClient(options);
-
-		// Assert
-		_ = client.Should().NotBeNull();
-		_ = client.Account.Should().Be(options.Account);
-		_ = client.BaseUrl.Should().NotBeNullOrEmpty();
-		_ = client.Psa.Should().NotBeNull();
-		_ = client.ServiceDesk.Should().NotBeNull();
-		_ = client.System.Should().NotBeNull();
-	}
+		=> AssertInstantiates(BaseOptions(Account, ClientId, ClientSecret), client =>
+		{
+			_ = client.BaseUrl.Should().NotBeNullOrEmpty();
+			_ = client.Psa.Should().NotBeNull();
+			_ = client.ServiceDesk.Should().NotBeNull();
+			_ = client.System.Should().NotBeNull();
+		});
 
 	[Fact]
 	public void HaloClient_WithExtendedOptions_CanBeInstantiated()
-	{
-		// Arrange
-		var options = new HaloClientOptions
-		{
-			Account = Account,
-			ClientId = ClientId,
-			ClientSecret = ClientSecret,
-			RequestTimeout = TimeSpan.FromSeconds(60),
-			MaxRetryAttempts = 5,
-			RetryDelay = TimeSpan.FromSeconds(2),
-			EnableRequestLogging = true,
-			EnableResponseLogging = true,
-			Logger = _fixture.Logger
-		};
-
-		// Act
-		using var client = new HaloClient(options);
-
-		// Assert
-		_ = client.Should().NotBeNull();
-		_ = client.Account.Should().Be(options.Account);
-		_ = client.BaseUrl.Should().Contain(options.Account);
-	}
+		=> AssertInstantiates(
+			new HaloClientOptions
+			{
+				Account = Account,
+				ClientId = ClientId,
+				ClientSecret = ClientSecret,
+				RequestTimeout = TimeSpan.FromSeconds(60),
+				MaxRetryAttempts = 5,
+				RetryDelay = TimeSpan.FromSeconds(2),
+				EnableRequestLogging = true,
+				EnableResponseLogging = true,
+				Logger = _fixture.Logger
+			},
+			client => _ = client.BaseUrl.Should().Contain(client.Account));
 
 	[Fact]
 	public void HaloClientOptions_WithInvalidAccount_ThrowsArgumentException()
@@ -119,4 +102,13 @@ public class HaloClientInfrastructureTests(IntegrationTestFixture fixture)
 		=> _ = ((Action)options.Validate).Should()
 			.Throw<TException>()
 			.WithMessage(expectedMessagePattern);
+
+	private static void AssertInstantiates(HaloClientOptions options, Action<HaloClient> assertMore)
+	{
+		using var client = new HaloClient(options);
+
+		_ = client.Should().NotBeNull();
+		_ = client.Account.Should().Be(options.Account);
+		assertMore(client);
+	}
 }

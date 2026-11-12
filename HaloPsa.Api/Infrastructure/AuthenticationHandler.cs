@@ -8,7 +8,7 @@ namespace HaloPsa.Api.Infrastructure;
 /// <summary>
 /// HTTP message handler that manages OAuth2 authentication for Halo API requests using client credentials flow
 /// </summary>
-internal sealed class AuthenticationHandler : DelegatingHandler
+internal sealed partial class AuthenticationHandler : DelegatingHandler
 {
 	private static readonly JsonSerializerOptions _jsonSerializerOptions = new()
 	{
@@ -78,7 +78,7 @@ internal sealed class AuthenticationHandler : DelegatingHandler
 			// Create a new request message for retry (HttpRequestMessage can only be sent once)
 			if (!string.IsNullOrEmpty(_accessToken))
 			{
-				var retryRequest = await CloneHttpRequestMessageAsync(request);
+				var retryRequest = await HttpRequestCloner.CloneAsync(request);
 				retryRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
 
 				response.Dispose(); // Dispose the 401 response
@@ -87,164 +87,6 @@ internal sealed class AuthenticationHandler : DelegatingHandler
 		}
 
 		return response;
-	}
-
-	/// <summary>
-	/// Clones an HttpRequestMessage for retry purposes since HttpRequestMessage can only be sent once
-	/// </summary>
-	private static async Task<HttpRequestMessage> CloneHttpRequestMessageAsync(HttpRequestMessage original)
-	{
-		var clone = new HttpRequestMessage(original.Method, original.RequestUri);
-
-		// Copy headers
-		foreach (var header in original.Headers)
-		{
-			_ = clone.Headers.TryAddWithoutValidation(header.Key, header.Value);
-		}
-
-		// Copy content if present
-		if (original.Content != null)
-		{
-			var contentBytes = await original.Content.ReadAsByteArrayAsync();
-			clone.Content = new ByteArrayContent(contentBytes);
-
-			// Copy content headers
-			foreach (var header in original.Content.Headers)
-			{
-				_ = clone.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
-			}
-		}
-
-		// Copy other properties
-		clone.Version = original.Version;
-		foreach (var property in original.Options)
-		{
-			clone.Options.Set(new HttpRequestOptionsKey<object?>(property.Key), property.Value);
-		}
-
-		return clone;
-	}
-
-	private async Task EnsureValidTokenAsync(CancellationToken cancellationToken)
-	{
-		// Check if we need a new token (with 5-minute buffer)
-		if (!string.IsNullOrEmpty(_accessToken) && _tokenExpiry > DateTime.UtcNow.AddMinutes(5))
-		{
-			return;
-		}
-
-		await _tokenSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-		try
-		{
-			// Double-check after acquiring the lock
-			if (!string.IsNullOrEmpty(_accessToken) && _tokenExpiry > DateTime.UtcNow.AddMinutes(5))
-			{
-				return;
-			}
-
-			await RefreshTokenAsync(cancellationToken).ConfigureAwait(false);
-		}
-		finally
-		{
-			_ = _tokenSemaphore.Release();
-		}
-	}
-
-	private async Task RefreshTokenAsync(CancellationToken cancellationToken)
-	{
-		if (_options.Logger != null)
-		{
-			LogRefreshingToken(_options.Logger);
-		}
-
-		try
-		{
-			var tokenResponse = await RequestTokenAsync(cancellationToken).ConfigureAwait(false);
-			_accessToken = tokenResponse.AccessToken;
-			_tokenExpiry = DateTime.UtcNow.AddSeconds(tokenResponse.ExpiresIn - 60); // 60-second buffer
-
-			if (_options.Logger?.IsEnabled(LogLevel.Debug) == true)
-			{
-				LogTokenRefreshed(_options.Logger, _tokenExpiry);
-			}
-		}
-		catch (Exception ex) when (ex is not AuthenticationException)
-		{
-			if (_options.Logger != null)
-			{
-				LogTokenRefreshFailed(_options.Logger, ex);
-			}
-
-			throw new AuthenticationException("Failed to obtain access token from Halo API", ex);
-		}
-	}
-
-	private async Task<TokenResponse> RequestTokenAsync(CancellationToken cancellationToken)
-	{
-		using var formData = new FormUrlEncodedContent(new Dictionary<string, string>
-		{
-			["grant_type"] = "client_credentials",
-			["client_id"] = _options.ClientId,
-			["client_secret"] = _options.ClientSecret,
-			["scope"] = "all"
-		});
-
-		using var response = await _authHttpClient.PostAsync("/auth/token", formData, cancellationToken).ConfigureAwait(false);
-
-		if (!response.IsSuccessStatusCode)
-		{
-			await ThrowAuthenticationFailureAsync(response, cancellationToken).ConfigureAwait(false);
-		}
-
-		var responseContent = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-		LogTokenResponseIfEnabled(responseContent);
-		return DeserializeTokenResponse(responseContent, response.StatusCode);
-	}
-
-	private async Task ThrowAuthenticationFailureAsync(
-		HttpResponseMessage response,
-		CancellationToken cancellationToken)
-	{
-		var errorContent = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-		if (_options.Logger != null)
-		{
-			LogAuthFailed(_options.Logger, response.StatusCode, errorContent);
-		}
-
-		throw new AuthenticationException(
-			$"Failed to obtain access token. Status: {response.StatusCode}, Content: {errorContent}");
-	}
-
-	private void LogTokenResponseIfEnabled(string responseContent)
-	{
-		if (_options.Logger?.IsEnabled(LogLevel.Debug) == true)
-		{
-			LogTokenResponse(_options.Logger, responseContent);
-		}
-	}
-
-	private static TokenResponse DeserializeTokenResponse(
-		string responseContent,
-		System.Net.HttpStatusCode statusCode)
-	{
-		TokenResponse? tokenResponse;
-		try
-		{
-			tokenResponse = JsonSerializer.Deserialize<TokenResponse>(responseContent, _jsonSerializerOptions);
-		}
-		catch (JsonException)
-		{
-			// The token endpoint can return a 2xx with a non-JSON (e.g. HTML login/error page) body.
-			// Raise a clear, specific AuthenticationException here (rather than letting the raw JsonException
-			// propagate) so RefreshTokenAsync's "ex is not AuthenticationException" filter skips its Error log.
-			var excerpt = responseContent.Length > 200 ? responseContent[..200] + "..." : responseContent;
-			throw new AuthenticationException(
-				$"Failed to obtain access token: the Halo API token endpoint returned a non-JSON response. Status: {statusCode}, Content: {excerpt}");
-		}
-
-		return tokenResponse is null || string.IsNullOrEmpty(tokenResponse.AccessToken)
-			? throw new AuthenticationException($"Invalid token response received from Halo API. Response: {responseContent}")
-			: tokenResponse;
 	}
 
 	protected override void Dispose(bool disposing)
@@ -256,18 +98,6 @@ internal sealed class AuthenticationHandler : DelegatingHandler
 		}
 
 		base.Dispose(disposing);
-	}
-
-	private sealed record TokenResponse
-	{
-		[JsonPropertyName("access_token")]
-		public string AccessToken { get; init; } = "";
-
-		[JsonPropertyName("token_type")]
-		public string TokenType { get; init; } = "";
-
-		[JsonPropertyName("expires_in")]
-		public int ExpiresIn { get; init; }
 	}
 
 	private static readonly Action<ILogger, Exception?> _logUnauthorizedRefresh = LoggerMessage.Define(
@@ -311,23 +141,4 @@ internal sealed class AuthenticationHandler : DelegatingHandler
 
 	private static void LogTokenResponse(ILogger logger, string response)
 		=> _logTokenResponse(logger, response, null);
-}
-
-/// <summary>
-/// Exception thrown when authentication with the Halo API fails
-/// </summary>
-public sealed class AuthenticationException : Exception
-{
-	/// <summary>
-	/// Initializes a new instance of the AuthenticationException class with a specified error message
-	/// </summary>
-	/// <param name="message">The message that describes the error</param>
-	public AuthenticationException(string message) : base(message) { }
-
-	/// <summary>
-	/// Initializes a new instance of the AuthenticationException class with a specified error message and a reference to the inner exception
-	/// </summary>
-	/// <param name="message">The message that describes the error</param>
-	/// <param name="innerException">The exception that is the cause of the current exception</param>
-	public AuthenticationException(string message, Exception innerException) : base(message, innerException) { }
 }

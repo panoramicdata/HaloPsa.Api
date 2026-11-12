@@ -1,8 +1,8 @@
 using AwesomeAssertions;
 using HaloPsa.Api.Converters;
 using HaloPsa.Api.Models.Tickets;
-using System.Text;
 using System.Text.Json;
+using static HaloPsa.Api.Test.Infrastructure.ListConverterTestSupport;
 
 namespace HaloPsa.Api.Test.Infrastructure;
 
@@ -14,23 +14,11 @@ public class IdObjectListConverterTests
 {
 	private static readonly JsonSerializerOptions _options = new() { Converters = { new IdObjectListConverter() } };
 
-	// Reads through the converter directly: the serializer never calls it for a JSON null.
-	private static IReadOnlyList<int> Read(string json)
-	{
-		var reader = new Utf8JsonReader(Encoding.UTF8.GetBytes(json));
-		_ = reader.Read();
-
-		return new IdObjectListConverter().Read(ref reader, typeof(IReadOnlyList<int>), _options);
-	}
+	private static IReadOnlyList<int> Read(string json) => ReadWith(new IdObjectListConverter(), _options, json);
 
 	[Fact]
 	public void Write_ThenRead_RoundTrips()
-	{
-		var json = JsonSerializer.Serialize<IReadOnlyList<int>>([3, 1, 2], _options);
-
-		_ = json.Should().Be("""[{"id":3},{"id":1},{"id":2}]""");
-		_ = Read(json).Should().Equal(3, 1, 2);
-	}
+		=> AssertRoundTrips<int>(Read, _options, [3, 1, 2], """[{"id":3},{"id":1},{"id":2}]""");
 
 	[Fact]
 	public void Read_WhenTheArrayIsEmpty_ReturnsNoIds()
@@ -42,11 +30,7 @@ public class IdObjectListConverterTests
 	[InlineData("\"id\"", "String")]
 	[InlineData("5", "Number")]
 	public void Read_WhenTheTokenIsNotAnArray_Throws(string json, string token)
-	{
-		var act = () => Read(json);
-
-		_ = act.Should().Throw<JsonException>().WithMessage($"Expected an array of id objects, but found {token}.");
-	}
+		=> AssertReadThrows(Read, json, $"Expected an array of id objects, but found {token}.");
 
 	[Theory]
 	[InlineData("[1]")]
@@ -60,11 +44,7 @@ public class IdObjectListConverterTests
 	[InlineData("""[{"id":1.5}]""")]
 	[InlineData("""[{"id":null}]""")]
 	public void Read_WhenAnItemIsNotAnObjectWithAnIntegerId_Throws(string json)
-	{
-		var act = () => Read(json);
-
-		_ = act.Should().Throw<JsonException>().WithMessage("Expected an object with an integer \"id\".");
-	}
+		=> AssertReadThrows(Read, json, "Expected an object with an integer \"id\".");
 
 	[Fact]
 	public void Deserialize_ACreateRequestWithTheAssetsFirst_ReadsTheAssetsAndTheLaterProperties()

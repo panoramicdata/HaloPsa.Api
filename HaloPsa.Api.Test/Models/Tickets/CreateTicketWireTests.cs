@@ -1,11 +1,7 @@
 using AwesomeAssertions;
-using HaloPsa.Api.Infrastructure;
-using HaloPsa.Api.Interfaces;
 using HaloPsa.Api.Models.CustomFields;
 using HaloPsa.Api.Models.Tickets;
-using HaloPsa.Api.Test.Infrastructure;
-using Refit;
-using System.Text.Json;
+using static HaloPsa.Api.Test.Models.Tickets.TicketWireTestSupport;
 
 namespace HaloPsa.Api.Test.Models.Tickets;
 
@@ -17,30 +13,22 @@ public class CreateTicketWireTests
 {
 	private const string CreatedJson = """{"ticket":{"id":901,"summary":"S","status_id":1,"client_id":21,"user_id":9}}""";
 
-	private static (TicketsApiWrapper Wrapper, CapturingHandler Handler) Create()
-	{
-		var handler = new CapturingHandler(CreatedJson);
-		return (new TicketsApiWrapper(RestService.For<ITicketsApi>(handler.CreateClient())), handler);
-	}
-
-	private static JsonElement SentBody(CapturingHandler handler) => JsonDocument.Parse(handler.RequestBodies[^1]!).RootElement;
+	private static CreateTicketRequest Valid(string summary = "S", int clientId = 21, int userId = 9)
+		=> new() { Summary = summary, ClientId = clientId, UserId = userId };
 
 	[Fact]
 	public async Task CreateAsync_PostsAJsonArrayHoldingOneTicket()
 	{
-		var (wrapper, handler) = Create();
-		_ = await wrapper.CreateAsync(new CreateTicketRequest { Summary = "S", ClientId = 21, UserId = 9 }, CancellationToken.None);
+		var (wrapper, handler) = Create(CreatedJson);
+		_ = await wrapper.CreateAsync(Valid(), CancellationToken.None);
 
-		_ = handler.Methods.Should().Equal(HttpMethod.Post);
-		_ = handler.LastRequest.AbsolutePath.Should().Be("/api/Tickets");
-		_ = SentBody(handler).ValueKind.Should().Be(JsonValueKind.Array);
-		_ = SentBody(handler).GetArrayLength().Should().Be(1);
+		AssertPostedAsOneElementArray(handler);
 	}
 
 	[Fact]
 	public async Task CreateAsync_SendsEveryFieldUnderHalosFaultsName()
 	{
-		var (wrapper, handler) = Create();
+		var (wrapper, handler) = Create(CreatedJson);
 		_ = await wrapper.CreateAsync(new CreateTicketRequest
 		{
 			Summary = "S", Details = "D", DetailsHtml = "<p>D</p>", Status = 2, Priority = 3, ClientId = 21, SiteId = 44, UserId = 9,
@@ -50,16 +38,11 @@ public class CreateTicketWireTests
 		}, CancellationToken.None);
 
 		var ticket = SentBody(handler)[0];
-		_ = ticket.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo(
+		AssertNames(
+			ticket,
 			"summary", "details", "details_html", "status_id", "priority_id", "client_id", "site_id", "user_id", "agent_id", "team_id",
 			"categoryid_1", "tickettype_id", "dateoccurred", "targetdate", "source", "customfields", "assets", "tags");
-		_ = ticket.GetProperty("client_id").GetInt32().Should().Be(21);
-		_ = ticket.GetProperty("site_id").GetInt32().Should().Be(44);
-		_ = ticket.GetProperty("user_id").GetInt32().Should().Be(9);
-		_ = ticket.GetProperty("status_id").GetInt32().Should().Be(2);
-		_ = ticket.GetProperty("priority_id").GetInt32().Should().Be(3);
-		_ = ticket.GetProperty("categoryid_1").GetInt32().Should().Be(7);
-		_ = ticket.GetProperty("tickettype_id").GetInt32().Should().Be(8);
+		AssertInts(ticket, ("client_id", 21), ("site_id", 44), ("user_id", 9), ("status_id", 2), ("priority_id", 3), ("categoryid_1", 7), ("tickettype_id", 8));
 		_ = ticket.GetProperty("dateoccurred").GetString().Should().Be("2026-11-03T10:15:00Z");
 		_ = ticket.GetProperty("customfields").GetRawText().Should().Be("""[{"id":1,"value":"cisco-sa-test"}]""");
 		_ = ticket.GetProperty("assets").GetRawText().Should().Be("""[{"id":77}]""");
@@ -69,21 +52,19 @@ public class CreateTicketWireTests
 	[Fact]
 	public async Task CreateAsync_OmitsUnsetAndObsoleteFields()
 	{
-		var (wrapper, handler) = Create();
+		var (wrapper, handler) = Create(CreatedJson);
 #pragma warning disable CS0618 // proving the obsolete members are never sent
 		_ = await wrapper.CreateAsync(new CreateTicketRequest { Summary = "S", ClientId = 21, UserId = 9, SuppressEmails = true, Notes = "n" }, CancellationToken.None);
 #pragma warning restore CS0618
 
-		_ = SentBody(handler)[0].EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo("summary", "client_id", "user_id");
+		AssertNames(SentBody(handler)[0], "summary", "client_id", "user_id");
 	}
 
 	[Fact]
 	public async Task CreateAsync_WithAList_SendsEveryRequestInOneArray()
 	{
-		var (wrapper, handler) = Create();
-		_ = await wrapper.CreateAsync(
-			[new CreateTicketRequest { Summary = "A", ClientId = 21, UserId = 9 }, new CreateTicketRequest { Summary = "B", ClientId = 22, UserId = 9 }],
-			CancellationToken.None);
+		var (wrapper, handler) = Create(CreatedJson);
+		_ = await wrapper.CreateAsync([Valid("A"), Valid("B", clientId: 22)], CancellationToken.None);
 
 		_ = handler.Requests.Should().HaveCount(1);
 		_ = SentBody(handler).EnumerateArray().Select(t => t.GetProperty("summary").GetString()).Should().Equal("A", "B");
@@ -94,12 +75,10 @@ public class CreateTicketWireTests
 	[InlineData(-1)]
 	public async Task CreateAsync_WhenClientIdIsNotPositive_RefusesBeforeSending(int id)
 	{
-		var (wrapper, handler) = Create();
+		var (wrapper, handler) = Create(CreatedJson);
 
-		var act = async () => await wrapper.CreateAsync(new CreateTicketRequest { Summary = "S", ClientId = id, UserId = 9 }, CancellationToken.None);
-
-		_ = (await act.Should().ThrowAsync<ArgumentOutOfRangeException>()).WithMessage("*ClientId*");
-		_ = handler.Requests.Should().BeEmpty();
+		await AssertRefusedBeforeSendingAsync<ArgumentOutOfRangeException>(
+			handler, () => wrapper.CreateAsync(Valid(clientId: id), CancellationToken.None), "*ClientId*");
 	}
 
 	[Theory]
@@ -107,46 +86,35 @@ public class CreateTicketWireTests
 	[InlineData(-1)]
 	public async Task CreateAsync_WhenUserIdIsNotPositive_RefusesBeforeSending(int id)
 	{
-		var (wrapper, handler) = Create();
+		var (wrapper, handler) = Create(CreatedJson);
 
-		var act = async () => await wrapper.CreateAsync(new CreateTicketRequest { Summary = "S", ClientId = 21, UserId = id }, CancellationToken.None);
-
-		_ = (await act.Should().ThrowAsync<ArgumentOutOfRangeException>()).WithMessage("*UserId*");
-		_ = handler.Requests.Should().BeEmpty();
+		await AssertRefusedBeforeSendingAsync<ArgumentOutOfRangeException>(
+			handler, () => wrapper.CreateAsync(Valid(userId: id), CancellationToken.None), "*UserId*");
 	}
 
 	[Fact]
 	public async Task CreateAsync_WhenSiteIdIsNotPositive_RefusesBeforeSending()
 	{
-		var (wrapper, handler) = Create();
+		var (wrapper, handler) = Create(CreatedJson);
 
-		var act = async () => await wrapper.CreateAsync(new CreateTicketRequest { Summary = "S", ClientId = 21, UserId = 9, SiteId = 0 }, CancellationToken.None);
-
-		_ = (await act.Should().ThrowAsync<ArgumentOutOfRangeException>()).WithMessage("*SiteId*");
-		_ = handler.Requests.Should().BeEmpty();
+		await AssertRefusedBeforeSendingAsync<ArgumentOutOfRangeException>(
+			handler, () => wrapper.CreateAsync(Valid() with { SiteId = 0 }, CancellationToken.None), "*SiteId*");
 	}
 
 	[Fact]
 	public async Task CreateAsync_WithAnEmptyList_RefusesBeforeSending()
 	{
-		var (wrapper, handler) = Create();
+		var (wrapper, handler) = Create(CreatedJson);
 
-		var act = async () => await wrapper.CreateAsync([], CancellationToken.None);
-
-		_ = await act.Should().ThrowAsync<ArgumentException>();
-		_ = handler.Requests.Should().BeEmpty();
+		await AssertRefusedBeforeSendingAsync<ArgumentException>(handler, () => wrapper.CreateAsync([], CancellationToken.None), "*");
 	}
 
 	[Fact]
 	public async Task CreateAsync_WhenOneOfSeveralIsInvalid_SendsNone()
 	{
-		var (wrapper, handler) = Create();
+		var (wrapper, handler) = Create(CreatedJson);
 
-		var act = async () => await wrapper.CreateAsync(
-			[new CreateTicketRequest { Summary = "A", ClientId = 21, UserId = 9 }, new CreateTicketRequest { Summary = "B", ClientId = 21, UserId = 0 }],
-			CancellationToken.None);
-
-		_ = (await act.Should().ThrowAsync<ArgumentOutOfRangeException>()).WithMessage("*UserId*");
-		_ = handler.Requests.Should().BeEmpty();
+		await AssertRefusedBeforeSendingAsync<ArgumentOutOfRangeException>(
+			handler, () => wrapper.CreateAsync([Valid("A"), Valid("B", userId: 0)], CancellationToken.None), "*UserId*");
 	}
 }

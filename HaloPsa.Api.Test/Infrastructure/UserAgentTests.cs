@@ -8,6 +8,7 @@ namespace HaloPsa.Api.Test.Infrastructure;
 public class UserAgentTests
 {
 	private const string _sampleUserAgent = "ExampleProduct/1.0 Example Company";
+	private const string _packageDefault = "Halo.Api/.NET";
 
 	[Fact]
 	public void ApiRequests_CarryTheConfiguredUserAgent()
@@ -25,40 +26,16 @@ public class UserAgentTests
 	{
 		using var client = new HaloClient(CreateOptions(userAgent));
 
-		_ = client.HttpClient.DefaultRequestHeaders.UserAgent.ToString().Should().Be("Halo.Api/.NET");
+		_ = client.HttpClient.DefaultRequestHeaders.UserAgent.ToString().Should().Be(_packageDefault);
 	}
 
 	[Fact]
-	public async Task TokenRequest_CarriesTheConfiguredUserAgent()
-	{
-		var tokenStub = new TokenStub();
-		using var handler = new AuthenticationHandler(CreateOptions(_sampleUserAgent), tokenStub)
-		{
-			InnerHandler = new CapturingHandler("{}")
-		};
-
-		await SendApiRequestAsync(handler);
-
-		var tokenRequest = tokenStub.Requests.Should().ContainSingle().Subject;
-		_ = tokenRequest.Path.Should().Be("/auth/token");
-		_ = tokenRequest.UserAgent.Should().Be(_sampleUserAgent);
-	}
+	public Task TokenRequest_CarriesTheConfiguredUserAgent()
+		=> AssertTokenRequestUserAgentAsync(_sampleUserAgent, _sampleUserAgent);
 
 	[Fact]
-	public async Task TokenRequest_CarriesThePackageDefault_WhenNoneIsConfigured()
-	{
-		var tokenStub = new TokenStub();
-		using var handler = new AuthenticationHandler(CreateOptions(null), tokenStub)
-		{
-			InnerHandler = new CapturingHandler("{}")
-		};
-
-		await SendApiRequestAsync(handler);
-
-		var tokenRequest = tokenStub.Requests.Should().ContainSingle().Subject;
-		_ = tokenRequest.Path.Should().Be("/auth/token");
-		_ = tokenRequest.UserAgent.Should().Be("Halo.Api/.NET");
-	}
+	public Task TokenRequest_CarriesThePackageDefault_WhenNoneIsConfigured()
+		=> AssertTokenRequestUserAgentAsync(null, _packageDefault);
 
 	[Fact]
 	public void Construction_WhenTheUserAgentIsNotAValidHeaderValue_ThrowsAnErrorNamingUserAgent()
@@ -66,6 +43,21 @@ public class UserAgentTests
 		var act = () => new HaloClient(CreateOptions("Example, Ltd"));
 
 		_ = act.Should().Throw<ArgumentException>().WithMessage("*UserAgent*");
+	}
+
+	private static async Task AssertTokenRequestUserAgentAsync(string? configured, string expected)
+	{
+		var tokenStub = new TokenStub();
+		using var handler = new AuthenticationHandler(CreateOptions(configured), tokenStub)
+		{
+			InnerHandler = new CapturingHandler("{}")
+		};
+
+		await SendApiRequestAsync(handler);
+
+		var tokenRequest = tokenStub.Requests.Should().ContainSingle().Subject;
+		_ = tokenRequest.Path.Should().Be("/auth/token");
+		_ = tokenRequest.UserAgent.Should().Be(expected);
 	}
 
 	private static HaloClientOptions CreateOptions(string? userAgent) => new()
