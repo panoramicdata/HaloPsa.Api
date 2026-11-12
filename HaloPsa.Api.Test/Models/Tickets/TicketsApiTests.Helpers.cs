@@ -268,4 +268,10 @@ public partial class TicketsApiTests
 	private static bool TicketMentions(Ticket ticket, string content)
 		=> ticket.Summary.Contains(content, StringComparison.OrdinalIgnoreCase)
 			|| (!string.IsNullOrEmpty(ticket.Details) && ticket.Details.Contains(content, StringComparison.OrdinalIgnoreCase));
+
+	private static void AssertTicketList(TicketsResponse result)
+	{
+		_ = result.Should().NotBeNull();
+		_ = result.Tickets.Should().NotBeNull();
+	}
 }

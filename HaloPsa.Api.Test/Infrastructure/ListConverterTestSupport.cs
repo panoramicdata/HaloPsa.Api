@@ -1,4 +1,5 @@
 using AwesomeAssertions;
+using HaloPsa.Api.Models.Tickets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -32,5 +33,25 @@ internal static class ListConverterTestSupport
 
 		_ = json.Should().Be(expectedJson);
 		_ = read(json).Should().Equal(values);
+	}
+
+	internal static void AssertCreateReadsLaterProperties(string firstProperty, Action<CreateTicketRequest> assertFirst)
+	{
+		var request = JsonSerializer.Deserialize<CreateTicketRequest>($$"""{{{firstProperty}},"summary":"S","client_id":21,"user_id":9}""")!;
+
+		assertFirst(request);
+		_ = request.Summary.Should().Be("S");
+		_ = request.ClientId.Should().Be(21);
+		_ = request.UserId.Should().Be(9);
+	}
+
+	internal static void AssertUpdateReadsLaterProperties(string firstProperty, Action<UpdateTicketRequest> assertFirst)
+	{
+		var request = JsonSerializer.Deserialize<UpdateTicketRequest>($$"""{{{firstProperty}},"id":7,"summary":"S","status_id":2}""")!;
+
+		assertFirst(request);
+		_ = request.Id.Should().Be(7);
+		_ = request.Summary.Should().Be("S");
+		_ = request.Status.Should().Be(2);
 	}
 }

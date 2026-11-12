@@ -48,23 +48,13 @@ public class IdObjectListConverterTests
 
 	[Fact]
 	public void Deserialize_ACreateRequestWithTheAssetsFirst_ReadsTheAssetsAndTheLaterProperties()
-	{
-		var request = JsonSerializer.Deserialize<CreateTicketRequest>("""{"assets":[{"id":3},{"id":1}],"summary":"S","client_id":21,"user_id":9}""")!;
-
-		_ = request.AssetIds.Should().Equal(3, 1);
-		_ = request.Summary.Should().Be("S");
-		_ = request.ClientId.Should().Be(21);
-		_ = request.UserId.Should().Be(9);
-	}
+		=> AssertCreateReadsLaterProperties("""
+			"assets":[{"id":3},{"id":1}]
+			""", request => _ = request.AssetIds.Should().Equal(3, 1));
 
 	[Fact]
 	public void Deserialize_AnUpdateRequestWithTheAssetsFirst_ReadsTheAssetsAndTheLaterProperties()
-	{
-		var request = JsonSerializer.Deserialize<UpdateTicketRequest>("""{"assets":[{"id":3},{"id":1}],"id":7,"summary":"S","status_id":2}""")!;
-
-		_ = request.AssetIds.Should().Equal(3, 1);
-		_ = request.Id.Should().Be(7);
-		_ = request.Summary.Should().Be("S");
-		_ = request.Status.Should().Be(2);
-	}
+		=> AssertUpdateReadsLaterProperties("""
+			"assets":[{"id":3},{"id":1}]
+			""", request => _ = request.AssetIds.Should().Equal(3, 1));
 }

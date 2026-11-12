@@ -48,23 +48,13 @@ public class TagTextListConverterTests
 
 	[Fact]
 	public void Deserialize_ACreateRequestWithTheTagsFirst_ReadsTheTagsAndTheLaterProperties()
-	{
-		var request = JsonSerializer.Deserialize<CreateTicketRequest>("""{"tags":[{"text":"b"},{"text":"a"}],"summary":"S","client_id":21,"user_id":9}""")!;
-
-		_ = request.Tags.Should().Equal("b", "a");
-		_ = request.Summary.Should().Be("S");
-		_ = request.ClientId.Should().Be(21);
-		_ = request.UserId.Should().Be(9);
-	}
+		=> AssertCreateReadsLaterProperties("""
+			"tags":[{"text":"b"},{"text":"a"}]
+			""", request => _ = request.Tags.Should().Equal("b", "a"));
 
 	[Fact]
 	public void Deserialize_AnUpdateRequestWithTheTagsFirst_ReadsTheTagsAndTheLaterProperties()
-	{
-		var request = JsonSerializer.Deserialize<UpdateTicketRequest>("""{"tags":[{"text":"b"},{"text":"a"}],"id":7,"summary":"S","status_id":2}""")!;
-
-		_ = request.Tags.Should().Equal("b", "a");
-		_ = request.Id.Should().Be(7);
-		_ = request.Summary.Should().Be("S");
-		_ = request.Status.Should().Be(2);
-	}
+		=> AssertUpdateReadsLaterProperties("""
+			"tags":[{"text":"b"},{"text":"a"}]
+			""", request => _ = request.Tags.Should().Equal("b", "a"));
 }

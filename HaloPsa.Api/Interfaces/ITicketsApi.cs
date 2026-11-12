@@ -69,7 +69,7 @@ public interface ITicketsApi
 	/// </summary>
 	/// <param name="requests">The ticket creation requests</param>
 	/// <param name="cancellationToken">Cancellation token</param>
-	/// <returns>The response: <see cref="CreateTicketResponse.Tickets"/> holds every ticket Halo returned, and <see cref="CreateTicketResponse.Ticket"/> (and <see cref="CreateTicketResponse.TicketId"/>) is the first</returns>
+	/// <returns>The response: <see cref="TicketWriteResponse.Tickets"/> holds every ticket Halo returned, and <see cref="TicketWriteResponse.Ticket"/> (and <see cref="TicketWriteResponse.TicketId"/>) is the first</returns>
 	/// <exception cref="JsonException">
 	/// Halo answered success but the response could not be read; the ticket may have been created, so do not retry.
 	/// The message names the ticket id when one could be read.
@@ -84,7 +84,7 @@ public interface ITicketsApi
 	/// </summary>
 	/// <param name="requests">The ticket update requests, each carrying the id of the ticket to update</param>
 	/// <param name="cancellationToken">Cancellation token</param>
-	/// <returns>The response: <see cref="UpdateTicketResponse.Tickets"/> holds every ticket Halo returned, and <see cref="UpdateTicketResponse.Ticket"/> (and <see cref="UpdateTicketResponse.TicketId"/>) is the first</returns>
+	/// <returns>The response: <see cref="TicketWriteResponse.Tickets"/> holds every ticket Halo returned, and <see cref="TicketWriteResponse.Ticket"/> (and <see cref="TicketWriteResponse.TicketId"/>) is the first</returns>
 	/// <exception cref="JsonException">
 	/// Halo answered success but the response could not be read; the update may have been applied, so do not retry.
 	/// The message names the ticket id when one could be read.
