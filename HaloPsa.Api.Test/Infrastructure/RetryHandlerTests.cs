@@ -103,19 +103,27 @@ public class RetryHandlerTests
 
 		_ = logger.Messages.Should().ContainSingle(message => message.Contains("succeeded on attempt 2", StringComparison.Ordinal));
 	}
-
 	private sealed class ListLogger : Microsoft.Extensions.Logging.ILogger
 	{
 		public List<string> Messages { get; } = [];
 
 		public IDisposable? BeginScope<TState>(TState state)
 			where TState : notnull
-			=> null;
+		{
+			ArgumentNullException.ThrowIfNull(state);
 
-		public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+			return null;
+		}
+
+		public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel)
+			=> logLevel != Microsoft.Extensions.Logging.LogLevel.None;
 
 		public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-			=> Messages.Add(formatter(state, exception));
+		{
+			ArgumentNullException.ThrowIfNull(formatter);
+
+			Messages.Add($"{logLevel}: {formatter(state, exception)}");
+		}
 	}
 
 	private static RetryHandler CreateRetryHandler(SequencingHandler stub, Microsoft.Extensions.Logging.ILogger? logger = null)
