@@ -118,8 +118,9 @@ public class RetryHandlerTests
 		public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel)
 			=> logLevel != Microsoft.Extensions.Logging.LogLevel.None;
 
-		public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId _, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+		public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
 		{
+			ArgumentOutOfRangeException.ThrowIfNegative(eventId.Id);
 			ArgumentNullException.ThrowIfNull(formatter);
 
 			Messages.Add($"{logLevel}: {formatter(state, exception)}");
