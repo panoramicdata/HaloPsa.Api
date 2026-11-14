@@ -1,10 +1,12 @@
-﻿# Halo PSA API .NET Library
+# Halo PSA API .NET Library
 
 [![NuGet Version](https://img.shields.io/nuget/v/HaloPsa.Api)](https://www.nuget.org/packages/HaloPsa.Api)
 [![NuGet Downloads](https://img.shields.io/nuget/dt/HaloPsa.Api)](https://www.nuget.org/packages/HaloPsa.Api)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/panoramicdata/HaloPsa.Api/publish-nuget.yml)](https://github.com/panoramicdata/HaloPsa.Api/actions)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/a6c135d1c93d4d818e770f149385a149)](https://app.codacy.com/gh/panoramicdata/HaloPsa.Api/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+> **Need help with APIs or .NET?** Panoramic Data are experts in APIs and .NET, and we can help with your development. [Contact us](https://www.panoramicdata.com/contact-us) or see our [software services](https://www.panoramicdata.com/services/software).
 
 A comprehensive, modern .NET library for interacting with the [Halo PSA](https://halopsa.com/) API. This library provides full coverage of the Halo PSA API with a clean, intuitive interface using modern C# patterns and best practices.
 
