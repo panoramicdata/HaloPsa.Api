@@ -399,7 +399,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Copyright
 
-Copyright © 2025 Panoramic Data Limited. All rights reserved.
+Copyright © 2026 Panoramic Data Limited. All rights reserved.
 
 ## Changelog
 
