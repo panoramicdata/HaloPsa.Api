@@ -102,10 +102,10 @@ public record User
 	public string? Mobile { get; init; }
 
 	/// <summary>
-	/// Whether this user is an agent
+	/// Whether this user is linked to an agent; Halo's Users record has no <c>isagent</c> key, so this is derived from <see cref="LinkedAgentId"/>
 	/// </summary>
-	[JsonPropertyName("isagent")]
-	public bool IsAgent { get; init; }
+	[JsonIgnore]
+	public bool IsAgent => LinkedAgentId is > 0;
 
 	/// <summary>
 	/// Whether this user is an important user

@@ -32,8 +32,17 @@ public record Status
 	public string? Color { get; init; }
 
 	/// <summary>
+	/// Halo's status type, the <c>type</c> key of its Status schema; the swagger does not say what each value means
+	/// </summary>
+	[JsonPropertyName("type")]
+	public int? Type { get; init; }
+
+	/// <summary>
 	/// Whether this status represents a closed ticket
 	/// </summary>
+	/// <remarks>
+	/// Halo's Status schema has no <c>isclosed</c> key, so this stays false unless an installation sends one; see <see cref="Type"/>.
+	/// </remarks>
 	[JsonPropertyName("isclosed")]
 	public bool IsClosed { get; init; }
 

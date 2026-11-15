@@ -133,6 +133,9 @@ var userFilter = new UserFilter
 
 var users = await client.Psa.Users.GetAllAsync(userFilter, cancellationToken);
 
+// Or get every matching user, paging to the end
+var allUsers = await client.Psa.Users.GetAllPagedAsync(userFilter, cancellationToken);
+
 // Get user details
 var user = await client.Psa.Users.GetByIdAsync(123, cancellationToken);
 Console.WriteLine($"User: {user.Name} ({user.EmailAddress})");

@@ -132,4 +132,53 @@ public class UsersApiWrapperTests
 		_ = users.Select(u => u.Id).Should().Equal(42, 43);
 		_ = users[0].Login.Should().Be("jane.smith@example.com");
 	}
+
+	[Fact]
+	public async Task IsAgent_IsDerivedFromTheLinkedAgentId()
+	{
+		var linked = await CreateWrapper(CapturingHandler.Returning("""{"id":1,"name":"A","linked_agent_id":12,"isagent":false}""")).GetByIdAsync(1, CancellationToken.None);
+		var unlinked = await CreateWrapper(CapturingHandler.Returning("""{"id":2,"name":"B","linked_agent_id":-1,"isagent":true}""")).GetByIdAsync(2, CancellationToken.None);
+
+		_ = linked.IsAgent.Should().BeTrue();
+		_ = unlinked.IsAgent.Should().BeFalse();
+	}
+
+	[Fact]
+	public async Task GetAllPagedAsync_ReadsToTheEmptyPageAndReturnsEveryUser()
+	{
+		var handler = new CapturingHandler(request =>
+		{
+			var pageNo = int.Parse(CapturingHandler.ParseQuery(request.RequestUri!)["page_no"]!);
+			var count = pageNo switch { 1 => 100, 2 => 100, 3 => 20, _ => 0 };
+			var users = Enumerable.Range(((pageNo - 1) * 100) + 1, count).Select(id => $$"""{"id":{{id}},"name":"U{{id}}"}""");
+			return $$"""{"users":[{{string.Join(",", users)}}],"record_count":220}""";
+		});
+
+		var users = await CreateWrapper(handler).GetAllPagedAsync(filter: null, CancellationToken.None);
+
+		_ = users.Should().HaveCount(220);
+		_ = handler.Requests.Select(r => r.Query).Should().Equal(
+			"?pageinate=True&page_no=1&page_size=100",
+			"?pageinate=True&page_no=2&page_size=100",
+			"?pageinate=True&page_no=3&page_size=100",
+			"?pageinate=True&page_no=4&page_size=100");
+	}
+
+	[Fact]
+	public async Task GetAllPagedAsync_KeepsTheCallersFilter_ButForcesPagination()
+	{
+		var handler = new CapturingHandler(request =>
+			CapturingHandler.ParseQuery(request.RequestUri!)["page_no"] == "1"
+				? """{"users":[{"id":1,"name":"A"}],"record_count":1}"""
+				: """{"users":[],"record_count":1}""");
+
+		var users = await CreateWrapper(handler).GetAllPagedAsync(
+			new UserFilter { Search = "a", PageSize = 10, Paginate = false, PageNo = 9 },
+			CancellationToken.None);
+
+		_ = users.Should().HaveCount(1);
+		_ = handler.Requests.Select(r => r.Query).Should().Equal(
+			"?pageinate=True&page_no=1&page_size=10&search=a",
+			"?pageinate=True&page_no=2&page_size=10&search=a");
+	}
 }

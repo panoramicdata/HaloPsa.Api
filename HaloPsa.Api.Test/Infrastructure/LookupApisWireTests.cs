@@ -28,6 +28,17 @@ public class LookupApisWireTests
 	}
 
 	[Fact]
+	public async Task Statuses_GetById_ReadsTheTypeKeyOfHalosSchema()
+	{
+		var handler = CapturingHandler.Returning("""{"id":9,"name":"Closed","type":2}""");
+
+		var status = await new StatusesApiWrapper(CreateClient<IStatusesApi>(handler)).GetByIdAsync(9, CancellationToken.None);
+
+		_ = status.Type.Should().Be(2);
+		_ = status.IsClosed.Should().BeFalse();
+	}
+
+	[Fact]
 	public async Task Statuses_GetById_UsesTheApiPrefix()
 	{
 		var handler = CapturingHandler.Returning("""{"id":7,"name":"Seven"}""");
