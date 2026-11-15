@@ -34,6 +34,11 @@ public interface IUsersApi
     Task<UsersResponse> GetResponseAsync(UserFilter? filter, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Get every user matching a filter, paging to the end
+    /// </summary>
+    Task<IReadOnlyList<User>> GetAllPagedAsync(UserFilter? filter, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Get a user by ID
     /// </summary>
     Task<User> GetByIdAsync(int id, CancellationToken cancellationToken);
