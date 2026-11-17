@@ -1,4 +1,5 @@
 using AwesomeAssertions;
+using Refit;
 using HaloPsa.Api.Models.CustomFields;
 using System.Globalization;
 using System.Text.Json;
