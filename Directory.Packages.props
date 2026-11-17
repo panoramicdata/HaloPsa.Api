@@ -10,8 +10,9 @@
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="11.0.0" />
     <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="11.0.100" />
     <PackageVersion Include="Nerdbank.GitVersioning" Version="3.10.94" />
-    <PackageVersion Include="Refit" Version="16.4.0" />
-    <PackageVersion Include="Refit.HttpClientFactory" Version="16.4.0" /> 
+    <PackageVersion Include="Refit" Version="17.0.0" />
+    <PackageVersion Include="Refit.Reflection" Version="17.0.0" />
+    <PackageVersion Include="Refit.HttpClientFactory" Version="17.0.0" /> 
     <!-- Test project packages -->
     <PackageVersion Include="AwesomeAssertions" Version="9.6.0" />
     <PackageVersion Include="AwesomeAssertions.Analyzers" Version="9.0.8" />
