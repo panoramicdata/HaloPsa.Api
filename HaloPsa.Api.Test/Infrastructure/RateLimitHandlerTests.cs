@@ -103,6 +103,50 @@ public class RateLimitHandlerTests
 	}
 
 	[Fact]
+	public async Task CancellingTheTokenRequestsWaitForASlot_ReachesTheCallerAsACancellation()
+	{
+		var limiter = new RecordingRateLimiter { DelayBeforeSlot = TimeSpan.FromSeconds(10) };
+		var stub = new HaloStub(Statuses(HttpStatusCode.OK), HttpStatusCode.OK);
+		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter, maxRetryAttempts: 0, TimeSpan.FromSeconds(30)), () => stub);
+		using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+		cancellation.CancelAfter(TimeSpan.FromMilliseconds(100));
+
+		var act = () => http.GetAsync("/api/Tickets", cancellation.Token);
+
+		_ = await act.Should().ThrowAsync<OperationCanceledException>();
+		_ = stub.CallCount.Should().Be(0);
+		_ = limiter.Applied.Should().BeEmpty();
+		_ = limiter.Failures.Should().ContainSingle().Which.Should().BeAssignableTo<OperationCanceledException>();
+	}
+
+	[Fact]
+	public async Task CancellingTheTokenRequest_WithoutALimiter_ReachesTheCallerAsACancellation()
+	{
+		var stub = new HaloStub(Statuses(HttpStatusCode.OK), HttpStatusCode.OK) { TokenDelay = TimeSpan.FromSeconds(10) };
+		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter: null, maxRetryAttempts: 0, TimeSpan.FromSeconds(30)), () => stub);
+		using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+		cancellation.CancelAfter(TimeSpan.FromMilliseconds(100));
+
+		var act = () => http.GetAsync("/api/Tickets", cancellation.Token);
+
+		_ = await act.Should().ThrowAsync<OperationCanceledException>();
+	}
+
+	[Fact]
+	public async Task ATokenRequestThatTimesOutOnItsOwn_StillSurfacesAsAnAuthenticationException()
+	{
+		var limiter = new RecordingRateLimiter();
+		var stub = new HaloStub(Statuses(HttpStatusCode.OK), HttpStatusCode.OK) { TokenDelay = TimeSpan.FromSeconds(10) };
+		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter, maxRetryAttempts: 0, TimeSpan.FromMilliseconds(100)), () => stub);
+
+		var act = () => http.GetAsync("/api/Tickets", TestContext.Current.CancellationToken);
+
+		var thrown = (await act.Should().ThrowExactlyAsync<AuthenticationException>()).Which;
+		_ = thrown.InnerException.Should().BeOfType<TaskCanceledException>().Which.InnerException.Should().BeOfType<TimeoutException>();
+		_ = limiter.Failures.Should().ContainSingle();
+	}
+
+	[Fact]
 	public async Task AGiveUp_PropagatesUnwrapped_AndTakesNoSlot()
 	{
 		var limiter = new RecordingRateLimiter { ThrowOnApply = new HaloRequestNotSentException("busy") };
@@ -174,6 +218,11 @@ public class RateLimitHandlerTests
 		private int _apiCalls;
 
 		/// <summary>
+		/// How long a token request takes to be answered; the wait ends early when the request is cancelled
+		/// </summary>
+		public TimeSpan TokenDelay { get; init; } = TimeSpan.Zero;
+
+		/// <summary>
 		/// Every request that reached the transport, token requests included
 		/// </summary>
 		public int CallCount { get; private set; }
@@ -184,6 +233,11 @@ public class RateLimitHandlerTests
 
 			if (request.RequestUri!.AbsolutePath == "/auth/token")
 			{
+				if (TokenDelay > TimeSpan.Zero)
+				{
+					await Task.Delay(TokenDelay, cancellationToken).ConfigureAwait(false);
+				}
+
 				return new HttpResponseMessage(tokenStatus)
 				{
 					Content = new StringContent(tokenStatus == HttpStatusCode.OK
