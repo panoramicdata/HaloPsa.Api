@@ -82,7 +82,8 @@ public class RateLimitHandlerTests
 		var act = () => http.GetAsync("/api/Tickets", TestContext.Current.CancellationToken);
 
 		var thrown = (await act.Should().ThrowAsync<TaskCanceledException>()).Which;
-		_ = thrown.InnerException.Should().BeOfType<TimeoutException>();
+		var timeout = thrown.InnerException.Should().BeOfType<TimeoutException>().Subject;
+		_ = timeout.InnerException.Should().BeAssignableTo<OperationCanceledException>();
 		_ = limiter.Failures.Should().ContainSingle().Which.Should().Be<TaskCanceledException>();
 	}
 
@@ -227,6 +228,103 @@ public class RateLimitHandlerTests
 	}
 
 	[Fact]
+	public async Task WithoutALimiter_ATokenRequestThatTimesOut_SurfacesAsATimeoutNotAnAuthenticationException()
+	{
+		var stub = new HaloStub(Statuses(HttpStatusCode.OK), HttpStatusCode.OK) { TokenDelay = TimeSpan.FromSeconds(10) };
+		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter: null, maxRetryAttempts: 0, TimeSpan.FromMilliseconds(100)), () => stub);
+
+		var act = () => http.GetAsync("/api/Tickets", TestContext.Current.CancellationToken);
+
+		var thrown = (await act.Should().ThrowExactlyAsync<TaskCanceledException>()).Which;
+		_ = thrown.InnerException.Should().BeOfType<TimeoutException>();
+	}
+
+	[Fact]
+	public async Task AGetThatTimesOutPerAttempt_IsRetried_EachRetryTakingASlot()
+	{
+		var limiter = new RecordingRateLimiter();
+		var stub = new HaloStub(Stall, HttpStatusCode.OK);
+		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter, maxRetryAttempts: 1, TimeSpan.FromMilliseconds(100)), () => stub);
+
+		var act = () => http.GetAsync("/api/Tickets", TestContext.Current.CancellationToken);
+
+		var thrown = (await act.Should().ThrowExactlyAsync<TaskCanceledException>()).Which;
+		_ = thrown.InnerException.Should().BeOfType<TimeoutException>();
+		_ = limiter.Applied.Should().Equal(_tokenRequest, _ticketsRequest, _ticketsRequest);
+		_ = limiter.Failures.Should().Equal(typeof(TaskCanceledException), typeof(TaskCanceledException));
+	}
+
+	[Fact]
+	public async Task APostThatTimesOutPerAttempt_IsNotRetried()
+	{
+		var limiter = new RecordingRateLimiter();
+		var stub = new HaloStub(Stall, HttpStatusCode.OK);
+		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter, maxRetryAttempts: 1, TimeSpan.FromMilliseconds(100)), () => stub);
+		using var content = new StringContent("{}");
+
+		var act = () => http.PostAsync("/api/Tickets", content, TestContext.Current.CancellationToken);
+
+		var thrown = (await act.Should().ThrowExactlyAsync<TaskCanceledException>()).Which;
+		_ = thrown.InnerException.Should().BeOfType<TimeoutException>();
+		_ = limiter.Applied.Should().Equal(_tokenRequest, "POST /api/Tickets");
+		_ = limiter.Failures.Should().ContainSingle();
+	}
+
+	[Fact]
+	public async Task TheCallerCancellingMidAttempt_SurfacesAsTheCallersCancellation_NotATimeout()
+	{
+		var limiter = new RecordingRateLimiter();
+		var stub = new HaloStub(Stall, HttpStatusCode.OK);
+		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter, maxRetryAttempts: 0, TimeSpan.FromSeconds(30)), () => stub);
+		using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+		cancellation.CancelAfter(TimeSpan.FromMilliseconds(100));
+
+		var act = () => http.GetAsync("/api/Tickets", cancellation.Token);
+
+		var thrown = (await act.Should().ThrowAsync<OperationCanceledException>()).Which;
+		for (Exception? inner = thrown; inner is not null; inner = inner.InnerException)
+		{
+			_ = inner.Should().NotBeOfType<TimeoutException>();
+		}
+
+		_ = limiter.Applied.Should().Equal(_tokenRequest, _ticketsRequest);
+		_ = limiter.Failures.Should().ContainSingle().Which.Should().BeAssignableTo<OperationCanceledException>();
+	}
+
+	[Fact]
+	public async Task ABodyThatStallsPastTheTimeout_FailsTheAttemptAndDisposesTheResponse()
+	{
+		var limiter = new RecordingRateLimiter();
+		var content = new RecordingContent { BodyDelay = TimeSpan.FromSeconds(10) };
+		var stub = new HaloStub((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = content }), HttpStatusCode.OK);
+		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter, maxRetryAttempts: 0, TimeSpan.FromMilliseconds(100)), () => stub);
+		var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+		var act = () => http.GetAsync("/api/Tickets", TestContext.Current.CancellationToken);
+
+		var thrown = (await act.Should().ThrowAsync<TaskCanceledException>()).Which;
+		_ = thrown.InnerException.Should().BeOfType<TimeoutException>();
+		_ = stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(5));
+		_ = limiter.Failures.Should().ContainSingle().Which.Should().Be<TaskCanceledException>();
+		_ = limiter.Responses.Should().Equal(HttpStatusCode.OK);
+		_ = content.IsDisposed.Should().BeTrue();
+	}
+
+	[Fact]
+	public async Task AnOnResponseThatThrows_DisposesTheResponse()
+	{
+		var limiter = new RecordingRateLimiter { ThrowOnResponse = new InvalidOperationException("limiter bug"), ThrowOnResponseForPath = "/api/Tickets" };
+		var content = new RecordingContent();
+		var stub = new HaloStub((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = content }), HttpStatusCode.OK);
+		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter, maxRetryAttempts: 0, TimeSpan.FromSeconds(30)), () => stub);
+
+		var act = () => http.GetAsync("/api/Tickets", TestContext.Current.CancellationToken);
+
+		_ = await act.Should().ThrowExactlyAsync<InvalidOperationException>();
+		_ = content.IsDisposed.Should().BeTrue();
+	}
+
+	[Fact]
 	public async Task ATokenTooManyRequests_ReachesOnResponse()
 	{
 		var limiter = new RecordingRateLimiter();
@@ -240,7 +338,7 @@ public class RateLimitHandlerTests
 	}
 
 	[Fact]
-	public void WithoutALimiter_TheChainAndTimeoutAreUnchanged()
+	public void WithoutALimiter_TheOuterTimeoutIsRequestTimeout()
 	{
 		var timeout = TimeSpan.FromSeconds(12);
 
@@ -282,6 +380,47 @@ public class RateLimitHandlerTests
 		{
 			Content = new StringContent("{}")
 		});
+
+	private static async Task<HttpResponseMessage> Stall(int call, CancellationToken cancellationToken)
+	{
+		await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
+		return new HttpResponseMessage(HttpStatusCode.OK);
+	}
+
+	/// <summary>
+	/// A body that takes <see cref="BodyDelay"/> to be written, honouring cancellation, and records its disposal
+	/// </summary>
+	private sealed class RecordingContent : HttpContent
+	{
+		public TimeSpan BodyDelay { get; init; } = TimeSpan.Zero;
+
+		public bool IsDisposed { get; private set; }
+
+		protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context)
+			=> SerializeToStreamAsync(stream, context, CancellationToken.None);
+
+		protected override async Task SerializeToStreamAsync(Stream stream, TransportContext? context, CancellationToken cancellationToken)
+		{
+			if (BodyDelay > TimeSpan.Zero)
+			{
+				await Task.Delay(BodyDelay, cancellationToken).ConfigureAwait(false);
+			}
+
+			await stream.WriteAsync("{}"u8.ToArray(), cancellationToken).ConfigureAwait(false);
+		}
+
+		protected override bool TryComputeLength(out long length)
+		{
+			length = -1;
+			return false;
+		}
+
+		protected override void Dispose(bool disposing)
+		{
+			IsDisposed = true;
+			base.Dispose(disposing);
+		}
+	}
 
 	private sealed class HaloStub(Func<int, CancellationToken, Task<HttpResponseMessage>> api, HttpStatusCode tokenStatus) : HttpMessageHandler
 	{

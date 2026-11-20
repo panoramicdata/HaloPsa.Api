@@ -29,6 +29,16 @@ internal sealed class RecordingRateLimiter : IRateLimiter
 	public string? ThrowOnApplyForPath { get; init; }
 
 	/// <summary>
+	/// When set, thrown from <see cref="OnResponse"/> for requests with path <see cref="ThrowOnResponseForPath"/>
+	/// </summary>
+	public Exception? ThrowOnResponse { get; init; }
+
+	/// <summary>
+	/// The absolute path <see cref="ThrowOnResponse"/> applies to
+	/// </summary>
+	public string? ThrowOnResponseForPath { get; init; }
+
+	/// <summary>
 	/// "METHOD /path" of every request that was granted a slot
 	/// </summary>
 	public IReadOnlyList<string> Applied
@@ -93,6 +103,11 @@ internal sealed class RecordingRateLimiter : IRateLimiter
 		lock (_lock)
 		{
 			_responses.Add(response.StatusCode);
+		}
+
+		if (ThrowOnResponse is not null && request.RequestUri!.AbsolutePath == ThrowOnResponseForPath)
+		{
+			throw ThrowOnResponse;
 		}
 	}
 

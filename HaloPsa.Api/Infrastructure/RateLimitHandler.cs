@@ -65,7 +65,7 @@ internal sealed class RateLimitHandler(IRateLimiter rateLimiter, TimeSpan attemp
 			if (ex is OperationCanceledException && attemptCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
 			{
 				var message = $"The request was canceled due to the configured RequestTimeout of {attemptTimeout.TotalSeconds} seconds elapsing.";
-				throw new TaskCanceledException(message, new TimeoutException(message));
+				throw new TaskCanceledException(message, new TimeoutException(message, ex));
 			}
 
 			throw;
