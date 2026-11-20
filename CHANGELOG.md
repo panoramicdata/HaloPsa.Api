@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `UpdateTicketRequest.ClosureNote` (`closure_note`); `UpdateTicketResponse.Tickets`.
 - `DeleteAsync(id, reason)`, sending Halo's `reason` parameter.
 - `HaloPsa.Api.RateLimiting.IRateLimiter` (`ApplyRateLimitingAsync`, `OnResponse`, `OnSendFailed`) and `HaloClientOptions.RateLimiter`: when set, every attempt is paced through it, including retries, the re-send after a 401 and the token request.
-- `HaloRequestNotSentException`: thrown by a rate limiter to give up before sending. It is never retried, reaches the caller unwrapped (including from the token request) and is logged at Warning, not Error.
+- `HaloRequestNotSentException`: thrown by a rate limiter to give up before sending. It is never retried and reaches a `Psa` caller as the exception itself, not wrapped in Refit's `ApiRequestException` (including when it is thrown for the token request), and it is logged at Warning, not Error.
 - `Retry-After` given as an HTTP date is now read as well as delta seconds (`HaloRateLimitException.RetryAfterSeconds`).
 
 ### Changed
@@ -46,7 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A 429 Too Many Requests is never retried, for any method. Pacing is left to the caller or to an `IRateLimiter`.
 - When retries are exhausted, the last failed response is returned with its own status, headers and body, instead of a new bare response.
 - With a rate limiter set, `RequestTimeout` applies to each attempt and starts once a slot is acquired; `HttpClient.Timeout` is then infinite.
-- A 429 from the token endpoint raises `AuthenticationException` whose inner exception is a `HaloRateLimitException` carrying any Retry-After.
+- A 429 from the token endpoint raises `AuthenticationException` whose inner exception is a `HaloRateLimitException` carrying any Retry-After. On a `Psa` call it arrives inside Refit's `ApiRequestException`, whose inner exception is that `AuthenticationException`.
 - The caller's own cancellation during the token request now surfaces as `OperationCanceledException` instead of `AuthenticationException`. Without a rate limiter, a timeout during the token request now surfaces as `HttpClient`'s standard `TaskCanceledException` (with a `TimeoutException` inner), the same as a timeout on any other request; with a rate limiter, a token request that times out on its own is still wrapped in `AuthenticationException`.
 - `CreateTicketResponse` and `UpdateTicketResponse` still read Halo's `success` and `messages` from a `{"ticket":...}` wrapper, but now accept a single string message, skip non-string and blank items, give a null `Messages` rather than an empty list when nothing readable remains, and read `success` given as the string `"true"` or `"false"` or as 0 or 1, leaving `Success` true for any other value, where the read used to fail. A bare ticket or an array of tickets gives true and null.
 - Serializing a `CreateTicketResponse` or `UpdateTicketResponse` writes `{"ticket":...,"success":...}`, with `messages` when it is not null; `TicketId` and any tickets after the first are not written.

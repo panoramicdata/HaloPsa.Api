@@ -3,7 +3,9 @@ using HaloPsa.Api.Exceptions;
 using HaloPsa.Api.Http;
 using HaloPsa.Api.Infrastructure;
 using HaloPsa.Api.RateLimiting;
+using Refit;
 using System.Net;
+using System.Net.Http.Headers;
 
 namespace HaloPsa.Api.Test.Infrastructure;
 
@@ -163,6 +165,51 @@ public class RateLimitHandlerTests
 	}
 
 	[Fact]
+	public async Task AGiveUpOnTheTokenRequest_ReachesAPsaCallerUnwrapped()
+	{
+		var limiter = new RecordingRateLimiter { ThrowOnApply = new HaloRequestNotSentException("busy"), ThrowOnApplyForPath = "/auth/token" };
+		var stub = new HaloStub(Statuses(HttpStatusCode.OK), HttpStatusCode.OK);
+		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter, maxRetryAttempts: 0, TimeSpan.FromSeconds(30)), () => stub);
+		var psa = new PsaApi(http, readOnly: false);
+
+		var act = () => psa.Statuses.GetAllAsync(TestContext.Current.CancellationToken);
+
+		_ = await act.Should().ThrowExactlyAsync<HaloRequestNotSentException>();
+		_ = stub.CallCount.Should().Be(0);
+	}
+
+	[Fact]
+	public async Task AGiveUpOnTheApiRequest_ReachesAPsaCallerUnwrapped_AfterTheTokenWasGranted()
+	{
+		var limiter = new RecordingRateLimiter { ThrowOnApply = new HaloRequestNotSentException("busy"), ThrowOnApplyForPath = "/api/Status" };
+		var stub = new HaloStub(Statuses(HttpStatusCode.OK), HttpStatusCode.OK);
+		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter, maxRetryAttempts: 0, TimeSpan.FromSeconds(30)), () => stub);
+		var psa = new PsaApi(http, readOnly: false);
+
+		var act = () => psa.Statuses.GetAllAsync(TestContext.Current.CancellationToken);
+
+		_ = await act.Should().ThrowExactlyAsync<HaloRequestNotSentException>();
+		_ = limiter.Applied.Should().Equal(_tokenRequest);
+		_ = stub.CallCount.Should().Be(1);
+	}
+
+	[Fact]
+	public async Task ATokenTooManyRequests_ReachesAPsaCallerInsideAnApiRequestException()
+	{
+		var limiter = new RecordingRateLimiter();
+		var stub = new HaloStub(Statuses(HttpStatusCode.OK), HttpStatusCode.TooManyRequests) { TokenRetryAfter = TimeSpan.FromSeconds(30) };
+		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter, maxRetryAttempts: 0, TimeSpan.FromSeconds(30)), () => stub);
+		var psa = new PsaApi(http, readOnly: false);
+
+		var act = () => psa.Statuses.GetAllAsync(TestContext.Current.CancellationToken);
+
+		var thrown = (await act.Should().ThrowExactlyAsync<ApiRequestException>()).Which;
+		var authentication = thrown.InnerException.Should().BeOfType<AuthenticationException>().Subject;
+		var rateLimit = authentication.InnerException.Should().BeOfType<HaloRateLimitException>().Subject;
+		_ = rateLimit.RetryAfterSeconds.Should().Be(30);
+	}
+
+	[Fact]
 	public async Task ATokenTooManyRequests_ReachesOnResponse()
 	{
 		var limiter = new RecordingRateLimiter();
@@ -223,6 +270,11 @@ public class RateLimitHandlerTests
 		public TimeSpan TokenDelay { get; init; } = TimeSpan.Zero;
 
 		/// <summary>
+		/// The Retry-After sent with a non-OK token response, when set
+		/// </summary>
+		public TimeSpan? TokenRetryAfter { get; init; }
+
+		/// <summary>
 		/// Every request that reached the transport, token requests included
 		/// </summary>
 		public int CallCount { get; private set; }
@@ -238,12 +290,19 @@ public class RateLimitHandlerTests
 					await Task.Delay(TokenDelay, cancellationToken).ConfigureAwait(false);
 				}
 
-				return new HttpResponseMessage(tokenStatus)
+				var tokenResponse = new HttpResponseMessage(tokenStatus)
 				{
 					Content = new StringContent(tokenStatus == HttpStatusCode.OK
 						? """{"access_token":"stub-token","token_type":"Bearer","expires_in":3600}"""
 						: "slow down")
 				};
+
+				if (TokenRetryAfter is { } retryAfter)
+				{
+					tokenResponse.Headers.RetryAfter = new RetryConditionHeaderValue(retryAfter);
+				}
+
+				return tokenResponse;
 			}
 
 			return await api(_apiCalls++, cancellationToken).ConfigureAwait(false);

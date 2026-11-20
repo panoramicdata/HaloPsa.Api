@@ -10,10 +10,7 @@ namespace HaloPsa.Api;
 /// </summary>
 internal sealed class PsaApi(HttpClient _httpClient, bool? readOnly = null) : IPsaApi
 {
-	private static readonly RefitSettings _refitSettings = new()
-	{
-		ExceptionFactory = ConvertApiExceptionToHaloApiException
-	};
+	private static readonly RefitSettings _refitSettings = CreateRefitSettings();
 
 	public TicketsApiWrapper Tickets { get; } = new Lazy<TicketsApiWrapper>(() => new TicketsApiWrapper(RestService.For<ITicketsApi>(_httpClient, _refitSettings), readOnly)).Value;
 	public TicketTypesApiWrapper TicketTypes { get; } = new Lazy<TicketTypesApiWrapper>(() => new TicketTypesApiWrapper(RestService.For<ITicketTypesRefitApi>(_httpClient, _refitSettings))).Value;
@@ -27,6 +24,23 @@ internal sealed class PsaApi(HttpClient _httpClient, bool? readOnly = null) : IP
 	public CategoriesApiWrapper Categories { get; } = new Lazy<CategoriesApiWrapper>(() => new CategoriesApiWrapper(RestService.For<ICategoriesApi>(_httpClient, _refitSettings))).Value;
 	public ActionsApiWrapper Actions { get; } = new ActionsApiWrapper(RestService.For<IActionsApi>(_httpClient, _refitSettings));
 	public SitesApiWrapper Sites { get; } = new Lazy<SitesApiWrapper>(() => new SitesApiWrapper(RestService.For<ISitesApi>(_httpClient, _refitSettings))).Value;
+
+	private static RefitSettings CreateRefitSettings()
+	{
+		var settings = new RefitSettings
+		{
+			ExceptionFactory = ConvertApiExceptionToHaloApiException
+		};
+
+		// A rate limiter's give-up reaches the caller as it is thrown; every other transport failure keeps Refit's default
+		var defaultTransportExceptionFactory = settings.TransportExceptionFactory;
+		settings.TransportExceptionFactory = (request, exception, cancellationToken)
+			=> exception is HaloRequestNotSentException
+				? exception
+				: defaultTransportExceptionFactory(request, exception, cancellationToken);
+
+		return settings;
+	}
 
 	/// <summary>
 	/// Converts Refit ApiExceptions to appropriate HaloApiExceptions

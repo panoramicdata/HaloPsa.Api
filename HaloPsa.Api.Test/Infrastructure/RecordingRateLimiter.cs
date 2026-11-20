@@ -24,6 +24,11 @@ internal sealed class RecordingRateLimiter : IRateLimiter
 	public Exception? ThrowOnApply { get; init; }
 
 	/// <summary>
+	/// When set, <see cref="ThrowOnApply"/> only applies to requests with this absolute path
+	/// </summary>
+	public string? ThrowOnApplyForPath { get; init; }
+
+	/// <summary>
 	/// "METHOD /path" of every request that was granted a slot
 	/// </summary>
 	public IReadOnlyList<string> Applied
@@ -72,7 +77,7 @@ internal sealed class RecordingRateLimiter : IRateLimiter
 			await Task.Delay(DelayBeforeSlot, cancellationToken).ConfigureAwait(false);
 		}
 
-		if (ThrowOnApply is not null)
+		if (ThrowOnApply is not null && (ThrowOnApplyForPath is null || request.RequestUri!.AbsolutePath == ThrowOnApplyForPath))
 		{
 			throw ThrowOnApply;
 		}
