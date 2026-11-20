@@ -397,14 +397,15 @@ public class RateLimitHandlerTests
 			RequestTimeout = requestTimeout
 		};
 
-	private static Func<int, CancellationToken, Task<HttpResponseMessage>> Statuses(params HttpStatusCode[] statuses)
-		=> (call, _) => Task.FromResult(new HttpResponseMessage(statuses[Math.Min(call, statuses.Length - 1)])
+	private static Func<int, CancellationToken, Task<HttpResponseMessage>> Statuses(params HttpStatusCode[] responseCodes)
+		=> (call, _) => Task.FromResult(new HttpResponseMessage(responseCodes[Math.Min(call, responseCodes.Length - 1)])
 		{
 			Content = new StringContent("{}")
 		});
 
 	private static async Task<HttpResponseMessage> Stall(int call, CancellationToken cancellationToken)
 	{
+		ArgumentOutOfRangeException.ThrowIfNegative(call);
 		await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
 		return new HttpResponseMessage(HttpStatusCode.OK);
 	}
@@ -423,6 +424,7 @@ public class RateLimitHandlerTests
 
 		protected override async Task SerializeToStreamAsync(Stream stream, TransportContext? context, CancellationToken cancellationToken)
 		{
+			_ = context;
 			if (BodyDelay > TimeSpan.Zero)
 			{
 				await Task.Delay(BodyDelay, cancellationToken).ConfigureAwait(false);

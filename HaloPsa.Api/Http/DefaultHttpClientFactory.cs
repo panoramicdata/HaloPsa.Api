@@ -46,8 +46,7 @@ internal static class DefaultHttpClientFactory
 
 	private static DelegatingHandler BuildHandlerChain(HaloClientOptions options, Func<HttpMessageHandler> createTransport)
 	{
-		// Build the handler chain (order matters - authentication sits above the transport, error handling outermost);
-		// the rate limiter, when set, is innermost so every attempt, 401 re-send and token request takes a slot
+		// Handler order matters: authentication sits above the transport and error handling is outermost. The rate limiter, when set, is innermost so every attempt, 401 re-send and token request takes a slot.
 		DelegatingHandler chain = new AuthenticationHandler(options, WithRateLimiting(options, createTransport()))
 		{
 			InnerHandler = WithRateLimiting(options, createTransport())

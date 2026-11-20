@@ -90,6 +90,7 @@ public class AuthenticationTests
 	{
 		protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
 		{
+			ArgumentNullException.ThrowIfNull(request);
 			cancellationToken.ThrowIfCancellationRequested();
 			var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests)
 			{
