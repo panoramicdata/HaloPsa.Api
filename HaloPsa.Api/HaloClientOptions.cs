@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using HaloPsa.Api.RateLimiting;
+using Microsoft.Extensions.Logging;
 using System.Text.RegularExpressions;
 
 namespace HaloPsa.Api;
@@ -129,6 +130,11 @@ public class HaloClientOptions
 	/// </example>
 	/// </remarks>
 	public string? BaseUrl { get; init; }
+
+	/// <summary>
+	/// Paces every attempt sent to Halo, including retries and the token request. When set, RequestTimeout applies to each attempt and starts once a slot is acquired.
+	/// </summary>
+	public IRateLimiter? RateLimiter { get; init; }
 
 	/// <summary>
 	/// Gets the effective base URL for the Halo API: <see cref="BaseUrl"/> when one was supplied, otherwise

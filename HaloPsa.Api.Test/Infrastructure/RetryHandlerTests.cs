@@ -1,4 +1,5 @@
 using AwesomeAssertions;
+using HaloPsa.Api.Exceptions;
 using HaloPsa.Api.Infrastructure;
 using HaloPsa.Api.Models.Tickets;
 using System.Net;
@@ -56,6 +57,17 @@ public class RetryHandlerTests
 	}
 
 	[Fact]
+	public async Task RequestNotSent_IsNotRetried()
+	{
+		var stub = new SequencingHandler(new HaloRequestNotSentException("busy"), HttpStatusCode.OK);
+
+		var act = () => SendThroughRetryHandlerAsync(stub, HttpMethod.Get, TestContext.Current.CancellationToken);
+
+		_ = await act.Should().ThrowAsync<HaloRequestNotSentException>();
+		_ = stub.CallCount.Should().Be(1);
+	}
+
+	[Fact]
 	public Task Get_IsStillRetriedOnAServerError()
 		=> AssertAttemptsAsync(HttpMethod.Get, HttpStatusCode.ServiceUnavailable, expectedCalls: 2, expectedStatus: HttpStatusCode.OK);
 
@@ -82,30 +94,6 @@ public class RetryHandlerTests
 
 		_ = stub.CallCount.Should().Be(expectedCalls);
 		_ = response.StatusCode.Should().Be(expectedStatus);
-	}
-
-	private sealed class ListLogger : Microsoft.Extensions.Logging.ILogger
-	{
-		public List<string> Messages { get; } = [];
-
-		public IDisposable? BeginScope<TState>(TState state)
-			where TState : notnull
-		{
-			ArgumentNullException.ThrowIfNull(state);
-
-			return null;
-		}
-
-		public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel)
-			=> logLevel != Microsoft.Extensions.Logging.LogLevel.None;
-
-		public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-		{
-			ArgumentOutOfRangeException.ThrowIfNegative(eventId.Id);
-			ArgumentNullException.ThrowIfNull(formatter);
-
-			Messages.Add($"{logLevel}: {formatter(state, exception)}");
-		}
 	}
 
 	private static RetryHandler CreateRetryHandler(SequencingHandler stub, Microsoft.Extensions.Logging.ILogger? logger = null)
