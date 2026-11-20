@@ -8,7 +8,6 @@ internal sealed partial class RetryHandler
 	private static readonly HttpStatusCode[] _retryableStatusCodes =
 	[
 		HttpStatusCode.RequestTimeout,
-		HttpStatusCode.TooManyRequests,
 		HttpStatusCode.InternalServerError,
 		HttpStatusCode.BadGateway,
 		HttpStatusCode.ServiceUnavailable,
@@ -30,9 +29,9 @@ internal sealed partial class RetryHandler
 		return exponentialDelay > _maxRetryDelay ? _maxRetryDelay : exponentialDelay;
 	}
 
-	// A failed POST may already have been processed, so only a 429, which Halo answers unprocessed, is safe to re-send.
+	// A failed POST may already have been processed, so it is never re-sent.
 	private static bool MayRetry(HttpMethod method, HttpStatusCode statusCode)
-		=> IsRetryableStatusCode(statusCode) && (method != HttpMethod.Post || statusCode == HttpStatusCode.TooManyRequests);
+		=> IsRetryableStatusCode(statusCode) && method != HttpMethod.Post;
 
 	private static bool MayRetry(HttpMethod method, Exception ex)
 		=> IsRetryableException(ex) && method != HttpMethod.Post;
