@@ -33,6 +33,11 @@ internal sealed class ErrorHandler(ILogger? logger) : DelegatingHandler
 			var haloException = ConvertToHaloApiException(apiException, request);
 			throw haloException;
 		}
+		catch (HaloRequestNotSentException ex)
+		{
+			LogRequestNotSent(_logger, ex, request.RequestUri);
+			throw;
+		}
 		catch (Exception ex)
 		{
 			LogUnexpectedError(_logger, ex, request.RequestUri);
@@ -78,6 +83,13 @@ internal sealed class ErrorHandler(ILogger? logger) : DelegatingHandler
 	private static readonly Action<ILogger, Uri?, Exception?> _logUnexpectedError = LoggerMessage.Define<Uri?>(
 		LogLevel.Error, new EventId(2, nameof(LogUnexpectedError)),
 		"Unexpected error occurred during HTTP request to {RequestUri}");
+
+	private static readonly Action<ILogger, Uri?, Exception?> _logRequestNotSent = LoggerMessage.Define<Uri?>(
+		LogLevel.Warning, new EventId(3, nameof(LogRequestNotSent)),
+		"Request to {RequestUri} was not sent because the rate limiter gave up");
+
+	private static void LogRequestNotSent(ILogger logger, Exception ex, Uri? requestUri)
+		=> _logRequestNotSent(logger, requestUri, ex);
 
 	private static void LogApiException(ILogger logger, Exception ex, System.Net.HttpStatusCode statusCode, string? reasonPhrase)
 		=> _logApiException(logger, statusCode, reasonPhrase, ex);

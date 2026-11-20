@@ -1,3 +1,4 @@
+using HaloPsa.Api.Exceptions;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -49,7 +50,8 @@ internal sealed partial class AuthenticationHandler
 				LogTokenRefreshed(_options.Logger, _tokenExpiry);
 			}
 		}
-		catch (Exception ex) when (ex is not AuthenticationException)
+		catch (Exception ex) when (ex is not AuthenticationException and not HaloRequestNotSentException
+			&& !(ex is OperationCanceledException && cancellationToken.IsCancellationRequested))
 		{
 			if (_options.Logger != null)
 			{
@@ -92,8 +94,30 @@ internal sealed partial class AuthenticationHandler
 			LogAuthFailed(_options.Logger, response.StatusCode, errorContent);
 		}
 
+		var message = $"Failed to obtain access token. Status: {response.StatusCode}, Content: {errorContent}";
+		if (response.StatusCode != System.Net.HttpStatusCode.TooManyRequests)
+		{
+			throw new AuthenticationException(message);
+		}
+
+		var (details, _) = ApiErrorParser.ParseJsonContent(errorContent);
+		var errorContext = new HaloApiErrorContext
+		{
+			StatusCode = (int)response.StatusCode,
+			Details = details,
+			RequestUrl = response.RequestMessage?.RequestUri?.ToString(),
+			RequestMethod = response.RequestMessage?.Method.Method
+		};
+
 		throw new AuthenticationException(
-			$"Failed to obtain access token. Status: {response.StatusCode}, Content: {errorContent}");
+			message,
+			new HaloRateLimitException(
+				$"Rate limit exceeded on the token request: {errorContent}",
+				ApiErrorParser.ExtractRetryAfterSeconds(response.Headers),
+				null,
+				null,
+				null,
+				errorContext));
 	}
 
 	private void LogTokenResponseIfEnabled(string responseContent)

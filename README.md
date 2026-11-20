@@ -24,7 +24,7 @@ Supports .NET 11.0.
 - 🚀 **Modern .NET** - Built for .NET 11.0 with modern C# features
 - 🔒 **Type Safety** - Strongly typed models and responses
 - 📝 **Comprehensive Logging** - Built-in logging and request/response interception
-- 🔄 **Retry Logic** - Automatic retry with exponential backoff; a POST is retried only on 429 Too Many Requests
+- 🔄 **Retry Logic** - Automatic retry with exponential backoff; a 429 Too Many Requests and a POST are never retried
 - 📖 **Rich Documentation** - IntelliSense-friendly XML documentation
 - ✅ **Thoroughly Tested** - Comprehensive unit and integration tests
 - ⚡ **High Performance** - Optimized for efficiency and low memory usage
@@ -204,6 +204,57 @@ var options = new HaloClientOptions
 var client = new HaloClient(options);
 ```
 
+#### Rate Limiting
+
+Set `RateLimiter` to pace what the client sends to Halo. It is called before every attempt (retries, the re-send after a 401 and the token request included), and told how each attempt ended.
+
+```csharp
+using HaloPsa.Api.RateLimiting;
+
+public sealed class MinimumIntervalLimiter(TimeSpan interval) : IRateLimiter
+{
+    private readonly SemaphoreSlim _gate = new(1, 1);
+    private DateTime _next = DateTime.MinValue;
+
+    public async Task ApplyRateLimitingAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var wait = _next - DateTime.UtcNow;
+            if (wait > TimeSpan.Zero)
+            {
+                await Task.Delay(wait, cancellationToken);
+            }
+
+            _next = DateTime.UtcNow + interval;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public void OnResponse(HttpRequestMessage request, HttpResponseMessage response)
+    {
+    }
+
+    public void OnSendFailed(HttpRequestMessage request, Exception exception)
+    {
+    }
+}
+
+var options = new HaloClientOptions
+{
+    // ... authentication details
+    RateLimiter = new MinimumIntervalLimiter(TimeSpan.FromMilliseconds(250))
+};
+```
+
+- With a limiter, `RequestTimeout` applies to each attempt and starts once the attempt's slot is acquired. A timed-out attempt of a request that is not a POST is retried, taking another slot, and a call has no overall timeout: pass a `CancellationToken` to bound it.
+- To give up on a request without sending it, throw `HaloRequestNotSentException` from `ApplyRateLimitingAsync`. It is never retried and is not wrapped by Refit; the limiter gets neither `OnResponse` nor `OnSendFailed` for that attempt. Do not signal a give-up with `TaskCanceledException`, which is retried as a transient failure.
+- A 429 Too Many Requests is never retried. Through `Psa` it raises `HaloRateLimitException` with any Retry-After; a 429 from the token endpoint arrives as Refit's `ApiRequestException` whose inner is an `AuthenticationException` wrapping the `HaloRateLimitException`.
+
 ### 4. Authentication Troubleshooting
 
 If you're experiencing authentication issues:
@@ -307,6 +358,7 @@ public class HaloClientOptions
     public int MaxRetryAttempts { get; init; } = 3;
     public TimeSpan RetryDelay { get; init; } = TimeSpan.FromSeconds(1);
     public ILogger? Logger { get; init; } = null;
+    public IRateLimiter? RateLimiter { get; init; } = null; // paces every attempt; see Rate Limiting
     
     // Advanced options
     public bool EnableRequestLogging { get; init; } = false;

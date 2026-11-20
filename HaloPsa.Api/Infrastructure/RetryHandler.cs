@@ -63,18 +63,11 @@ internal sealed partial class RetryHandler(
 
 	private HttpResponseMessage CreateFinalFailureResponse(HttpRequestMessage request, HttpResponseMessage response)
 	{
-		var statusCode = response.StatusCode;
-		response.Dispose();
-
 		if (_logger?.IsEnabled(LogLevel.Warning) == true)
 		{
-			LogFinalFailureStatus(_logger, _maxRetryAttempts + 1, request.Method, request.RequestUri, statusCode);
+			LogFinalFailureStatus(_logger, _maxRetryAttempts + 1, request.Method, request.RequestUri, response.StatusCode);
 		}
 
-		return new HttpResponseMessage(statusCode)
-		{
-			RequestMessage = request,
-			ReasonPhrase = $"Failed after {_maxRetryAttempts + 1} attempts"
-		};
+		return response;
 	}
 }

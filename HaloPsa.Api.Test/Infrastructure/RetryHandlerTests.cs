@@ -1,4 +1,5 @@
 using AwesomeAssertions;
+using HaloPsa.Api.Exceptions;
 using HaloPsa.Api.Infrastructure;
 using HaloPsa.Api.Models.Tickets;
 using System.Net;
@@ -30,26 +31,40 @@ public class RetryHandlerTests
 	}
 
 	[Fact]
-	public Task Post_IsRetriedOnTooManyRequests()
-		=> AssertAttemptsAsync(HttpMethod.Post, HttpStatusCode.TooManyRequests, expectedCalls: 2, expectedStatus: HttpStatusCode.OK);
+	public Task Get_IsNotRetriedOnTooManyRequests()
+		=> AssertAttemptsAsync(HttpMethod.Get, HttpStatusCode.TooManyRequests, expectedCalls: 1, expectedStatus: HttpStatusCode.TooManyRequests);
 
 	[Fact]
-	public async Task Post_RetriedOnTooManyRequests_ResendsTheSameBody()
+	public Task Post_IsNotRetriedOnTooManyRequests()
+		=> AssertAttemptsAsync(HttpMethod.Post, HttpStatusCode.TooManyRequests, expectedCalls: 1, expectedStatus: HttpStatusCode.TooManyRequests);
+
+	[Fact]
+	public async Task FinalFailure_ReturnsTheLastResponseWithItsHeadersAndBody()
 	{
-		var stub = new SequencingHandler(HttpStatusCode.TooManyRequests, HttpStatusCode.OK)
+		var last = new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
 		{
-			ResponseBody = """{"id":901,"summary":"S","status_id":1,"client_id":801,"user_id":802}"""
+			Content = new StringContent("{\"error\":\"busy\"}", Encoding.UTF8, "application/json")
 		};
-		using var handler = CreateRetryHandler(stub);
-		using var httpClient = new HttpClient(handler, disposeHandler: false) { BaseAddress = new Uri("https://example.invalid") };
-		var psa = new PsaApi(httpClient, readOnly: false);
+		last.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromSeconds(120));
+		var stub = new SequencingHandler(HttpStatusCode.ServiceUnavailable, HttpStatusCode.ServiceUnavailable, last);
 
-		var response = await psa.Tickets.CreateAsync(new CreateTicketRequest { Summary = "S", ClientId = 801, UserId = 802 }, TestContext.Current.CancellationToken);
+		using var response = await SendThroughRetryHandlerAsync(stub, HttpMethod.Get, TestContext.Current.CancellationToken);
 
-		_ = stub.CallCount.Should().Be(2);
-		_ = stub.RequestBodies[0].Should().Contain("\"client_id\":801");
-		_ = stub.RequestBodies[1].Should().Be(stub.RequestBodies[0]);
-		_ = response.TicketId.Should().Be(901);
+		_ = stub.CallCount.Should().Be(3);
+		_ = response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+		_ = response.Headers.RetryAfter!.Delta.Should().Be(TimeSpan.FromSeconds(120));
+		_ = (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).Should().Be("{\"error\":\"busy\"}");
+	}
+
+	[Fact]
+	public async Task RequestNotSent_IsNotRetried()
+	{
+		var stub = new SequencingHandler(new HaloRequestNotSentException("busy"), HttpStatusCode.OK);
+
+		var act = () => SendThroughRetryHandlerAsync(stub, HttpMethod.Get, TestContext.Current.CancellationToken);
+
+		_ = await act.Should().ThrowAsync<HaloRequestNotSentException>();
+		_ = stub.CallCount.Should().Be(1);
 	}
 
 	[Fact]
@@ -79,52 +94,6 @@ public class RetryHandlerTests
 
 		_ = stub.CallCount.Should().Be(expectedCalls);
 		_ = response.StatusCode.Should().Be(expectedStatus);
-	}
-
-	[Fact]
-	public async Task Post_RetriedOnTooManyRequestsThenAnotherError_IsNotLoggedAsASuccess()
-	{
-		var stub = new SequencingHandler(HttpStatusCode.TooManyRequests, HttpStatusCode.InternalServerError);
-		var logger = new ListLogger();
-
-		using var response = await SendThroughRetryHandlerAsync(stub, HttpMethod.Post, TestContext.Current.CancellationToken, logger);
-
-		_ = response.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
-		_ = logger.Messages.Should().NotContain(message => message.Contains("succeeded", StringComparison.Ordinal));
-	}
-
-	[Fact]
-	public async Task Post_RetriedOnTooManyRequestsThenOk_IsLoggedAsASuccessOnTheSecondAttempt()
-	{
-		var stub = new SequencingHandler(HttpStatusCode.TooManyRequests, HttpStatusCode.OK);
-		var logger = new ListLogger();
-
-		using var response = await SendThroughRetryHandlerAsync(stub, HttpMethod.Post, TestContext.Current.CancellationToken, logger);
-
-		_ = logger.Messages.Should().ContainSingle(message => message.Contains("succeeded on attempt 2", StringComparison.Ordinal));
-	}
-	private sealed class ListLogger : Microsoft.Extensions.Logging.ILogger
-	{
-		public List<string> Messages { get; } = [];
-
-		public IDisposable? BeginScope<TState>(TState state)
-			where TState : notnull
-		{
-			ArgumentNullException.ThrowIfNull(state);
-
-			return null;
-		}
-
-		public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel)
-			=> logLevel != Microsoft.Extensions.Logging.LogLevel.None;
-
-		public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-		{
-			ArgumentOutOfRangeException.ThrowIfNegative(eventId.Id);
-			ArgumentNullException.ThrowIfNull(formatter);
-
-			Messages.Add($"{logLevel}: {formatter(state, exception)}");
-		}
 	}
 
 	private static RetryHandler CreateRetryHandler(SequencingHandler stub, Microsoft.Extensions.Logging.ILogger? logger = null)
@@ -167,6 +136,11 @@ public class RetryHandlerTests
 			if (outcome is Exception exception)
 			{
 				throw exception;
+			}
+
+			if (outcome is HttpResponseMessage prepared)
+			{
+				return prepared;
 			}
 
 			var response = new HttpResponseMessage((HttpStatusCode)outcome);

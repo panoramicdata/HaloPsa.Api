@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using HaloPsa.Api.RateLimiting;
+using Microsoft.Extensions.Logging;
 using System.Text.RegularExpressions;
 
 namespace HaloPsa.Api;
@@ -28,12 +29,12 @@ public class HaloClientOptions
 	public required string ClientSecret { get; init; }
 
 	/// <summary>
-	/// Gets or sets the HTTP request timeout. Default is 30 seconds
+	/// Gets or sets the HTTP request timeout; when <see cref="RateLimiter"/> is set it applies to each attempt and starts once the attempt's slot is acquired. Default is 30 seconds
 	/// </summary>
 	public TimeSpan RequestTimeout { get; init; } = TimeSpan.FromSeconds(30);
 
 	/// <summary>
-	/// Gets or sets the maximum number of retry attempts for failed requests; a POST is retried only on 429 Too Many Requests. Default is 3
+	/// Gets or sets the maximum number of retry attempts for failed requests; a 429 Too Many Requests is never retried, and a POST is never retried. Default is 3
 	/// </summary>
 	public int MaxRetryAttempts { get; init; } = 3;
 
@@ -129,6 +130,16 @@ public class HaloClientOptions
 	/// </example>
 	/// </remarks>
 	public string? BaseUrl { get; init; }
+
+	/// <summary>
+	/// Gets or sets the rate limiter that paces every attempt sent to Halo, including retries, the re-send after a 401 and the token request.
+	/// </summary>
+	/// <remarks>
+	/// <see cref="RequestTimeout"/> then applies to each attempt and starts once its slot is acquired; there is no overall timeout for a call, so pass a
+	/// <see cref="CancellationToken"/> to bound it. See <see cref="IRateLimiter"/> for what the limiter is called with and when.
+	/// A limiter gives up by throwing <see cref="Exceptions.HaloRequestNotSentException"/>.
+	/// </remarks>
+	public IRateLimiter? RateLimiter { get; init; }
 
 	/// <summary>
 	/// Gets the effective base URL for the Halo API: <see cref="BaseUrl"/> when one was supplied, otherwise

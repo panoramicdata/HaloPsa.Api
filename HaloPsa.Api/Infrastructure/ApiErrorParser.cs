@@ -239,12 +239,25 @@ internal static class ApiErrorParser
 	}
 
 	/// <summary>
-	/// Extracts Retry-After header value in seconds
+	/// Extracts the Retry-After header value in whole seconds, from either its delta-seconds or its HTTP-date form
 	/// </summary>
 	/// <param name="headers">The response headers</param>
-	/// <returns>Retry-After value in seconds or null</returns>
+	/// <returns>Retry-After value in seconds (zero for a date already past), or null when absent or unreadable</returns>
 	public static int? ExtractRetryAfterSeconds(HttpHeaders? headers)
 	{
+		if (headers is HttpResponseHeaders { RetryAfter: { } header })
+		{
+			if (header.Delta is { } delta)
+			{
+				return (int)Math.Min(int.MaxValue, Math.Ceiling(delta.TotalSeconds));
+			}
+
+			if (header.Date is { } date)
+			{
+				return (int)Math.Clamp(Math.Ceiling((date - DateTimeOffset.UtcNow).TotalSeconds), 0, int.MaxValue);
+			}
+		}
+
 		if (headers?.TryGetValues("Retry-After", out var values) == true)
 		{
 			var retryAfter = values.FirstOrDefault();
