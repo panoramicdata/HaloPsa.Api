@@ -29,6 +29,7 @@ public class ErrorHandlerTests
 		protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
 		{
 			ArgumentNullException.ThrowIfNull(request);
+			cancellationToken.ThrowIfCancellationRequested();
 			throw exception;
 		}
 	}
