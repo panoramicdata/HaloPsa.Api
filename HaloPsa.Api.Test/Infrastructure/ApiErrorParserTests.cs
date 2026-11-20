@@ -5,6 +5,7 @@ using HaloPsa.Api.Infrastructure;
 using HaloPsa.Api.Models.Tickets;
 using Refit;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text;
 
 namespace HaloPsa.Api.Test.Infrastructure;
@@ -120,6 +121,26 @@ public class ApiErrorParserTests
 	[Fact]
 	public void ParseJsonContent_WhenTheBodyIsNotJson_KeepsTheRawContent()
 		=> AssertRawContent("<html>Gateway page</html>");
+
+	[Fact]
+	public void RetryAfter_AsAnHttpDate_IsReadAsSecondsFromNow()
+	{
+		using var response = new HttpResponseMessage();
+		response.Headers.RetryAfter = new RetryConditionHeaderValue(DateTimeOffset.UtcNow.AddSeconds(90));
+
+		var seconds = ApiErrorParser.ExtractRetryAfterSeconds(response.Headers);
+
+		_ = seconds.Should().BeInRange(85, 90);
+	}
+
+	[Fact]
+	public void RetryAfter_AsAnHttpDateInThePast_IsZero()
+	{
+		using var response = new HttpResponseMessage();
+		response.Headers.RetryAfter = new RetryConditionHeaderValue(DateTimeOffset.UtcNow.AddSeconds(-90));
+
+		_ = ApiErrorParser.ExtractRetryAfterSeconds(response.Headers).Should().Be(0);
+	}
 
 	private static async Task<ExceptionAssertions<TException>> CreateExpectingAsync<TException>(string body, HttpStatusCode status)
 		where TException : Exception
