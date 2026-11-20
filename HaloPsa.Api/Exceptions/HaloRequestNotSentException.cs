@@ -3,6 +3,10 @@ namespace HaloPsa.Api.Exceptions;
 /// <summary>
 /// Exception thrown by an <see cref="RateLimiting.IRateLimiter"/> to give up on a request before it is sent
 /// </summary>
+/// <remarks>
+/// It is never retried, and a rate limiter that throws it gets no <see cref="RateLimiting.IRateLimiter.OnResponse"/> or
+/// <see cref="RateLimiting.IRateLimiter.OnSendFailed"/> call for that attempt. A call through <c>Psa</c> receives it as is; it is not wrapped in Refit's <c>ApiRequestException</c>.
+/// </remarks>
 public sealed class HaloRequestNotSentException : Exception
 {
 	/// <summary>

@@ -29,7 +29,7 @@ public class HaloClientOptions
 	public required string ClientSecret { get; init; }
 
 	/// <summary>
-	/// Gets or sets the HTTP request timeout. Default is 30 seconds
+	/// Gets or sets the HTTP request timeout; when <see cref="RateLimiter"/> is set it applies to each attempt and starts once the attempt's slot is acquired. Default is 30 seconds
 	/// </summary>
 	public TimeSpan RequestTimeout { get; init; } = TimeSpan.FromSeconds(30);
 
@@ -132,8 +132,13 @@ public class HaloClientOptions
 	public string? BaseUrl { get; init; }
 
 	/// <summary>
-	/// Paces every attempt sent to Halo, including retries and the token request. When set, RequestTimeout applies to each attempt and starts once a slot is acquired.
+	/// Gets or sets the rate limiter that paces every attempt sent to Halo, including retries, the re-send after a 401 and the token request.
 	/// </summary>
+	/// <remarks>
+	/// <see cref="RequestTimeout"/> then applies to each attempt and starts once its slot is acquired; there is no overall timeout for a call, so pass a
+	/// <see cref="CancellationToken"/> to bound it. See <see cref="IRateLimiter"/> for what the limiter is called with and when.
+	/// A limiter gives up by throwing <see cref="Exceptions.HaloRequestNotSentException"/>.
+	/// </remarks>
 	public IRateLimiter? RateLimiter { get; init; }
 
 	/// <summary>
