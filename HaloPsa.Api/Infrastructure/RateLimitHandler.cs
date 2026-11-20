@@ -1,4 +1,5 @@
 using HaloPsa.Api.RateLimiting;
+using System.Net;
 
 namespace HaloPsa.Api.Infrastructure;
 
@@ -45,6 +46,10 @@ internal sealed class RateLimitHandler(IRateLimiter rateLimiter, TimeSpan attemp
 		}
 	}
 
+	// A 429 whose body cannot be read is still a 429: it is returned with an empty body so the limiter sees it and it is never retried.
+	private static bool IsUnreadableTooManyRequests(HttpResponseMessage? response, CancellationToken cancellationToken)
+		=> response is { StatusCode: HttpStatusCode.TooManyRequests } && !cancellationToken.IsCancellationRequested;
+
 	private async Task<HttpResponseMessage> SendAttemptAsync(HttpRequestMessage request, CancellationToken cancellationToken)
 	{
 		using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -55,6 +60,12 @@ internal sealed class RateLimitHandler(IRateLimiter rateLimiter, TimeSpan attemp
 		{
 			response = await base.SendAsync(request, attemptCts.Token).ConfigureAwait(false);
 			await response.Content.LoadIntoBufferAsync(attemptCts.Token).ConfigureAwait(false);
+			return response;
+		}
+		catch (Exception) when (IsUnreadableTooManyRequests(response, cancellationToken))
+		{
+			response!.Content.Dispose();
+			response.Content = new ByteArrayContent([]);
 			return response;
 		}
 		catch (Exception ex)

@@ -333,6 +333,47 @@ public class RateLimitHandlerTests
 	}
 
 	[Fact]
+	public async Task ATooManyRequestsWhoseBodyStalls_IsReportedAsThe429_AndNeverRetried()
+	{
+		var limiter = new RecordingRateLimiter();
+		var stub = new HaloStub((_, _) =>
+		{
+			var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests) { Content = new RecordingContent { BodyDelay = TimeSpan.FromSeconds(10) } };
+			response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromSeconds(30));
+			return Task.FromResult(response);
+		}, HttpStatusCode.OK);
+		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter, maxRetryAttempts: 3, TimeSpan.FromMilliseconds(100)), () => stub);
+		var psa = new PsaApi(http, readOnly: false);
+		var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+		var act = () => psa.Statuses.GetAllAsync(TestContext.Current.CancellationToken);
+
+		var thrown = (await act.Should().ThrowExactlyAsync<HaloRateLimitException>()).Which;
+		_ = thrown.RetryAfterSeconds.Should().Be(30);
+		_ = stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(5));
+		_ = stub.CallCount.Should().Be(2);
+		_ = limiter.Responses.Should().Equal(HttpStatusCode.OK, HttpStatusCode.TooManyRequests);
+		_ = limiter.Failures.Should().BeEmpty();
+	}
+
+	[Fact]
+	public async Task AServiceUnavailableWhoseBodyStalls_StillFailsTheAttempt_ReportingAFailureNotAResponse()
+	{
+		var limiter = new RecordingRateLimiter();
+		var stub = new HaloStub((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) { Content = new RecordingContent { BodyDelay = TimeSpan.FromSeconds(10) } }), HttpStatusCode.OK);
+		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter, maxRetryAttempts: 0, TimeSpan.FromMilliseconds(100)), () => stub);
+		var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+		var act = () => http.GetAsync("/api/Tickets", TestContext.Current.CancellationToken);
+
+		var thrown = (await act.Should().ThrowAsync<TaskCanceledException>()).Which;
+		_ = thrown.InnerException.Should().BeOfType<TimeoutException>();
+		_ = stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(5));
+		_ = limiter.Failures.Should().ContainSingle().Which.Should().Be<TaskCanceledException>();
+		_ = limiter.Responses.Should().Equal(HttpStatusCode.OK);
+	}
+
+	[Fact]
 	public async Task AnOnResponseThatThrows_DisposesTheResponse()
 	{
 		var limiter = new RecordingRateLimiter { ThrowOnResponse = new InvalidOperationException("limiter bug"), ThrowOnResponseForPath = "/api/Tickets" };
