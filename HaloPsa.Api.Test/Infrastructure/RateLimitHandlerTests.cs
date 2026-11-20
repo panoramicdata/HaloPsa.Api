@@ -314,6 +314,32 @@ public class RateLimitHandlerTests
 	}
 
 	[Fact]
+	public async Task TheCallerCancellingWhileATooManyRequestsBodyIsRead_SurfacesAsTheCallersCancellation()
+	{
+		var limiter = new RecordingRateLimiter();
+		using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+		var stub = new HaloStub(async (_, _) =>
+		{
+			await cancellation.CancelAsync();
+			var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests) { Content = new RecordingContent { BodyDelay = TimeSpan.FromSeconds(10) } };
+			response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromSeconds(30));
+			return response;
+		}, HttpStatusCode.OK);
+		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter, maxRetryAttempts: 0, TimeSpan.FromSeconds(30)), () => stub);
+		var act = () => http.GetAsync("/api/Tickets", cancellation.Token);
+
+		var thrown = (await act.Should().ThrowAsync<OperationCanceledException>()).Which;
+		for (Exception? inner = thrown; inner is not null; inner = inner.InnerException)
+		{
+			_ = inner.Should().NotBeOfType<TimeoutException>();
+			_ = inner.Should().NotBeOfType<HaloRateLimitException>();
+		}
+
+		_ = limiter.Failures.Should().ContainSingle().Which.Should().BeAssignableTo<OperationCanceledException>();
+		_ = limiter.Responses.Should().Equal(HttpStatusCode.OK);
+	}
+
+	[Fact]
 	public async Task ABodyThatStallsPastTheTimeout_FailsTheAttemptAndDisposesTheResponse()
 	{
 		var limiter = new RecordingRateLimiter();
@@ -336,9 +362,10 @@ public class RateLimitHandlerTests
 	public async Task ATooManyRequestsWhoseBodyStalls_IsReportedAsThe429_AndNeverRetried()
 	{
 		var limiter = new RecordingRateLimiter();
+		var content = new RecordingContent { BodyDelay = TimeSpan.FromSeconds(10) };
 		var stub = new HaloStub((_, _) =>
 		{
-			var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests) { Content = new RecordingContent { BodyDelay = TimeSpan.FromSeconds(10) } };
+			var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests) { Content = content };
 			response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromSeconds(30));
 			return Task.FromResult(response);
 		}, HttpStatusCode.OK);
@@ -354,6 +381,7 @@ public class RateLimitHandlerTests
 		_ = stub.CallCount.Should().Be(2);
 		_ = limiter.Responses.Should().Equal(HttpStatusCode.OK, HttpStatusCode.TooManyRequests);
 		_ = limiter.Failures.Should().BeEmpty();
+		_ = content.IsDisposed.Should().BeTrue();
 	}
 
 	[Fact]

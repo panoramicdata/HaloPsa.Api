@@ -10,7 +10,7 @@ namespace HaloPsa.Api.Infrastructure;
 /// <remarks>
 /// It sits innermost, directly above the transport, so retries, the 401 re-send and token requests are all paced.
 /// The timeout starts once the slot is acquired, so time spent waiting for a slot never counts against it.
-/// The response body is buffered inside the timeout so the limiter sees a complete response.
+/// The response body is buffered inside the timeout so the limiter sees a complete response; a 429 whose body cannot be read is returned with an empty body.
 /// </remarks>
 internal sealed class RateLimitHandler(IRateLimiter rateLimiter, TimeSpan attemptTimeout) : DelegatingHandler
 {
