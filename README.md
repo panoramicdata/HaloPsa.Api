@@ -253,7 +253,7 @@ var options = new HaloClientOptions
 
 - With a limiter, `RequestTimeout` applies to each attempt and starts once the attempt's slot is acquired. A timed-out attempt of a request that is not a POST is retried, taking another slot, and a call has no overall timeout: pass a `CancellationToken` to bound it.
 - To give up on a request without sending it, throw `HaloRequestNotSentException` from `ApplyRateLimitingAsync`. It is never retried and is not wrapped by Refit; the limiter gets neither `OnResponse` nor `OnSendFailed` for that attempt. Do not signal a give-up with `TaskCanceledException`, which is retried as a transient failure.
-- A 429 Too Many Requests is never retried: the response is returned to the caller, and a 429 from the token endpoint raises `AuthenticationException` with a `HaloRateLimitException` inner exception.
+- A 429 Too Many Requests is never retried. Through `Psa` it raises `HaloRateLimitException` with any Retry-After; a 429 from the token endpoint arrives as Refit's `ApiRequestException` whose inner is an `AuthenticationException` wrapping the `HaloRateLimitException`.
 
 ### 4. Authentication Troubleshooting
 

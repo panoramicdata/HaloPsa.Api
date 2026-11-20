@@ -167,6 +167,25 @@ public class RateLimitHandlerTests
 	}
 
 	[Fact]
+	public async Task AnApiTooManyRequests_ReachesAPsaCallerAsAHaloRateLimitException_WithItsRetryAfter()
+	{
+		var stub = new HaloStub((_, _) =>
+		{
+			var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests) { Content = new StringContent("slow down") };
+			response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromSeconds(30));
+			return Task.FromResult(response);
+		}, HttpStatusCode.OK);
+		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter: null, maxRetryAttempts: 3, TimeSpan.FromSeconds(30)), () => stub);
+		var psa = new PsaApi(http, readOnly: false);
+
+		var act = () => psa.Statuses.GetAllAsync(TestContext.Current.CancellationToken);
+
+		var thrown = (await act.Should().ThrowExactlyAsync<HaloRateLimitException>()).Which;
+		_ = thrown.RetryAfterSeconds.Should().Be(30);
+		_ = stub.CallCount.Should().Be(2);
+	}
+
+	[Fact]
 	public async Task AGiveUpOnTheTokenRequest_ReachesAPsaCallerUnwrapped()
 	{
 		var limiter = new RecordingRateLimiter { ThrowOnApply = new HaloRequestNotSentException("busy"), ThrowOnApplyForPath = "/auth/token" };
@@ -274,11 +293,14 @@ public class RateLimitHandlerTests
 	public async Task TheCallerCancellingMidAttempt_SurfacesAsTheCallersCancellation_NotATimeout()
 	{
 		var limiter = new RecordingRateLimiter();
-		var stub = new HaloStub(Stall, HttpStatusCode.OK);
-		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter, maxRetryAttempts: 0, TimeSpan.FromSeconds(30)), () => stub);
 		using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-		cancellation.CancelAfter(TimeSpan.FromMilliseconds(100));
-
+		var stub = new HaloStub(async (_, cancellationToken) =>
+		{
+			await cancellation.CancelAsync();
+			await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
+			return new HttpResponseMessage(HttpStatusCode.OK);
+		}, HttpStatusCode.OK);
+		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter, maxRetryAttempts: 0, TimeSpan.FromSeconds(30)), () => stub);
 		var act = () => http.GetAsync("/api/Tickets", cancellation.Token);
 
 		var thrown = (await act.Should().ThrowAsync<OperationCanceledException>()).Which;
