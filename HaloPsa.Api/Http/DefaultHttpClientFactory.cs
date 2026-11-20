@@ -14,14 +14,24 @@ internal static class DefaultHttpClientFactory
 	/// </summary>
 	/// <param name="options">Configuration options for the client</param>
 	public static HttpClient Create(HaloClientOptions options)
+		=> Create(options, () => new HttpClientHandler());
+
+	/// <summary>
+	/// Creates the configured HttpClient over transports supplied by <paramref name="createTransport"/>, which is called
+	/// once for the main chain and once for the token client.
+	/// </summary>
+	/// <param name="options">Configuration options for the client</param>
+	/// <param name="createTransport">Creates a transport handler</param>
+	internal static HttpClient Create(HaloClientOptions options, Func<HttpMessageHandler> createTransport)
 	{
-		var chain = BuildHandlerChain(options);
+		var chain = BuildHandlerChain(options, createTransport);
 		var readOnlyHandler = new ReadOnlyHandler(options) { InnerHandler = chain };
 
 		var httpClient = new HttpClient(readOnlyHandler)
 		{
 			BaseAddress = new Uri(options.EffectiveBaseUrl),
-			Timeout = options.RequestTimeout
+			// With a rate limiter each attempt carries its own timeout, which starts once its slot is acquired
+			Timeout = options.RateLimiter is null ? options.RequestTimeout : Timeout.InfiniteTimeSpan
 		};
 
 		// Add default headers
@@ -34,12 +44,13 @@ internal static class DefaultHttpClientFactory
 		return httpClient;
 	}
 
-	private static DelegatingHandler BuildHandlerChain(HaloClientOptions options)
+	private static DelegatingHandler BuildHandlerChain(HaloClientOptions options, Func<HttpMessageHandler> createTransport)
 	{
-		// Build the handler chain (order matters - authentication should be innermost, error handling outermost)
-		DelegatingHandler chain = new AuthenticationHandler(options)
+		// Build the handler chain (order matters - authentication sits above the transport, error handling outermost);
+		// the rate limiter, when set, is innermost so every attempt, 401 re-send and token request takes a slot
+		DelegatingHandler chain = new AuthenticationHandler(options, WithRateLimiting(options, createTransport()))
 		{
-			InnerHandler = new HttpClientHandler()
+			InnerHandler = WithRateLimiting(options, createTransport())
 		};
 
 		if (options.MaxRetryAttempts > 0)
@@ -73,4 +84,9 @@ internal static class DefaultHttpClientFactory
 
 		return chain;
 	}
+
+	private static HttpMessageHandler WithRateLimiting(HaloClientOptions options, HttpMessageHandler transport)
+		=> options.RateLimiter is null
+			? transport
+			: new RateLimitHandler(options.RateLimiter, options.RequestTimeout) { InnerHandler = transport };
 }

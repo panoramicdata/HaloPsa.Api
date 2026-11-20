@@ -35,7 +35,8 @@ internal sealed partial class AuthenticationHandler : DelegatingHandler
 		_authHttpClient = new HttpClient(tokenHandler)
 		{
 			BaseAddress = new Uri(_options.EffectiveBaseUrl),
-			Timeout = _options.RequestTimeout
+			// With a rate limiter the token transport applies RequestTimeout per attempt, after its slot is acquired
+			Timeout = _options.RateLimiter is null ? _options.RequestTimeout : Timeout.InfiniteTimeSpan
 		};
 		_authHttpClient.DefaultRequestHeaders.Add("User-Agent", _options.EffectiveUserAgent);
 	}

@@ -50,7 +50,7 @@ internal sealed partial class AuthenticationHandler
 				LogTokenRefreshed(_options.Logger, _tokenExpiry);
 			}
 		}
-		catch (Exception ex) when (ex is not AuthenticationException)
+		catch (Exception ex) when (ex is not AuthenticationException and not HaloRequestNotSentException)
 		{
 			if (_options.Logger != null)
 			{
