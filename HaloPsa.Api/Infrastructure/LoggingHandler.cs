@@ -1,3 +1,4 @@
+using HaloPsa.Api.Exceptions;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 
@@ -95,7 +96,16 @@ internal sealed class LoggingHandler(
 	}
 
 	private void LogHttpException(HttpRequestMessage request, Exception exception, TimeSpan elapsed, string requestId)
-		=> LogException(logger, exception, requestId, request.Method, request.RequestUri, elapsed.TotalMilliseconds, exception.Message);
+	{
+		if (exception is HaloRequestNotSentException)
+		{
+			LogNotSent(logger, exception, requestId, request.Method, request.RequestUri, elapsed.TotalMilliseconds);
+		}
+		else
+		{
+			LogException(logger, exception, requestId, request.Method, request.RequestUri, elapsed.TotalMilliseconds, exception.Message);
+		}
+	}
 
 	private static readonly Action<ILogger, string, HttpMethod, Uri?, Exception?> _logRequest = LoggerMessage.Define<string, HttpMethod, Uri?>(
 		LogLevel.Information,
@@ -127,6 +137,11 @@ internal sealed class LoggingHandler(
 		new EventId(6, nameof(LogException)),
 		"[{RequestId}] HTTP {Method} {Uri} failed after {ElapsedMs}ms: {ErrorMessage}");
 
+	private static readonly Action<ILogger, string, HttpMethod, Uri?, double, Exception?> _logNotSent = LoggerMessage.Define<string, HttpMethod, Uri?, double>(
+		LogLevel.Warning,
+		new EventId(7, nameof(LogNotSent)),
+		"[{RequestId}] HTTP {Method} {Uri} was not sent: the rate limiter gave up after {ElapsedMs}ms");
+
 	private static void LogRequest(ILogger logger, string requestId, HttpMethod method, Uri? uri)
 		=> _logRequest(logger, requestId, method, uri, null);
 
@@ -144,4 +159,7 @@ internal sealed class LoggingHandler(
 
 	private static void LogException(ILogger logger, Exception ex, string requestId, HttpMethod method, Uri? uri, double elapsedMs, string errorMessage)
 		=> _logException(logger, requestId, method, uri, elapsedMs, errorMessage, ex);
+
+	private static void LogNotSent(ILogger logger, Exception ex, string requestId, HttpMethod method, Uri? uri, double elapsedMs)
+		=> _logNotSent(logger, requestId, method, uri, elapsedMs, ex);
 }

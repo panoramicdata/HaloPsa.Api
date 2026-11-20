@@ -3,6 +3,7 @@ using HaloPsa.Api.Exceptions;
 using HaloPsa.Api.Http;
 using HaloPsa.Api.Infrastructure;
 using HaloPsa.Api.RateLimiting;
+using Microsoft.Extensions.Logging;
 using Refit;
 using System.Net;
 using System.Net.Http.Headers;
@@ -210,6 +211,22 @@ public class RateLimitHandlerTests
 	}
 
 	[Fact]
+	public async Task AGiveUp_IsNotLoggedAtError_WithRequestAndResponseLoggingOn()
+	{
+		var logger = new ListLogger();
+		var limiter = new RecordingRateLimiter { ThrowOnApply = new HaloRequestNotSentException("busy"), ThrowOnApplyForPath = "/api/Tickets" };
+		var stub = new HaloStub(Statuses(HttpStatusCode.OK), HttpStatusCode.OK);
+		var options = CreateOptions(limiter, maxRetryAttempts: 0, TimeSpan.FromSeconds(30), logger, logRequestsAndResponses: true);
+		using var http = DefaultHttpClientFactory.Create(options, () => stub);
+
+		var act = () => http.GetAsync("/api/Tickets", TestContext.Current.CancellationToken);
+
+		_ = await act.Should().ThrowExactlyAsync<HaloRequestNotSentException>();
+		_ = logger.Levels.Should().NotContain(LogLevel.Error);
+		_ = logger.Levels.Should().Contain(LogLevel.Warning);
+	}
+
+	[Fact]
 	public async Task ATokenTooManyRequests_ReachesOnResponse()
 	{
 		var limiter = new RecordingRateLimiter();
@@ -243,8 +260,14 @@ public class RateLimitHandlerTests
 	}
 
 	private static HaloClientOptions CreateOptions(IRateLimiter? limiter, int maxRetryAttempts, TimeSpan requestTimeout)
+		=> CreateOptions(limiter, maxRetryAttempts, requestTimeout, logger: null, logRequestsAndResponses: false);
+
+	private static HaloClientOptions CreateOptions(IRateLimiter? limiter, int maxRetryAttempts, TimeSpan requestTimeout, ILogger? logger, bool logRequestsAndResponses)
 		=> new()
 		{
+			Logger = logger,
+			EnableRequestLogging = logRequestsAndResponses,
+			EnableResponseLogging = logRequestsAndResponses,
 			Account = "example",
 			ClientId = "550e8400-e29b-41d4-a716-446655440000",
 			ClientSecret = "550e8400-e29b-41d4-a716-446655440000-123e4567-e89b-12d3-a456-426614174000",
