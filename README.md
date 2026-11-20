@@ -24,7 +24,7 @@ Supports .NET 11.0.
 - 🚀 **Modern .NET** - Built for .NET 11.0 with modern C# features
 - 🔒 **Type Safety** - Strongly typed models and responses
 - 📝 **Comprehensive Logging** - Built-in logging and request/response interception
-- 🔄 **Retry Logic** - Automatic retry with exponential backoff; a POST is retried only on 429 Too Many Requests
+- 🔄 **Retry Logic** - Automatic retry with exponential backoff; a 429 Too Many Requests and a POST are never retried
 - 📖 **Rich Documentation** - IntelliSense-friendly XML documentation
 - ✅ **Thoroughly Tested** - Comprehensive unit and integration tests
 - ⚡ **High Performance** - Optimized for efficiency and low memory usage
