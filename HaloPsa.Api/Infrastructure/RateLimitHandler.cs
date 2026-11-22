@@ -10,20 +10,26 @@ namespace HaloPsa.Api.Infrastructure;
 /// <remarks>
 /// It sits innermost, directly above the transport, so retries, the 401 re-send and token requests are all paced.
 /// The timeout starts once the slot is acquired, so time spent waiting for a slot never counts against it.
-/// The response body is buffered inside the timeout so the limiter sees a complete response; a 429 whose body cannot be read is returned with an empty body.
+/// The response body is buffered inside the timeout, which bounds the body read; a 429 whose body cannot be read is returned with an empty body.
+/// The limiter is given a new <see cref="RateLimitAttempt"/> per attempt, never the request or response themselves.
 /// </remarks>
-internal sealed class RateLimitHandler(IRateLimiter rateLimiter, TimeSpan attemptTimeout) : DelegatingHandler
+/// <param name="rateLimiter">The limiter that paces attempts</param>
+/// <param name="attemptTimeout">The timeout applied to each attempt</param>
+/// <param name="isTokenRequest">True when the handler wraps the token client's transport</param>
+internal sealed class RateLimitHandler(IRateLimiter rateLimiter, TimeSpan attemptTimeout, bool isTokenRequest) : DelegatingHandler
 {
 	protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
 	{
-		// A throw here took no slot, so the limiter gets no callback for the attempt.
-		await rateLimiter.ApplyRateLimitingAsync(request, cancellationToken).ConfigureAwait(false);
+		var attempt = new RateLimitAttempt(request.Method, request.RequestUri, isTokenRequest);
 
-		var response = await SendAttemptAsync(request, cancellationToken).ConfigureAwait(false);
+		// A throw here took no slot, so the limiter gets no callback for the attempt.
+		await rateLimiter.ApplyRateLimitingAsync(attempt, cancellationToken).ConfigureAwait(false);
+
+		var response = await SendAttemptAsync(request, attempt, cancellationToken).ConfigureAwait(false);
 
 		try
 		{
-			rateLimiter.OnResponse(request, response);
+			rateLimiter.OnResponse(attempt, new RateLimitResponse(response.StatusCode, response.Headers.RetryAfter));
 		}
 		catch
 		{
@@ -38,7 +44,7 @@ internal sealed class RateLimitHandler(IRateLimiter rateLimiter, TimeSpan attemp
 	private static bool IsUnreadableTooManyRequests(HttpResponseMessage? response, CancellationToken cancellationToken)
 		=> response is { StatusCode: HttpStatusCode.TooManyRequests } && !cancellationToken.IsCancellationRequested;
 
-	private async Task<HttpResponseMessage> SendAttemptAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+	private async Task<HttpResponseMessage> SendAttemptAsync(HttpRequestMessage request, RateLimitAttempt attempt, CancellationToken cancellationToken)
 	{
 		using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
@@ -59,7 +65,7 @@ internal sealed class RateLimitHandler(IRateLimiter rateLimiter, TimeSpan attemp
 		catch (Exception ex)
 		{
 			response?.Dispose();
-			rateLimiter.OnSendFailed(request, ex);
+			rateLimiter.OnSendFailed(attempt, ex);
 
 			if (ex is OperationCanceledException && attemptCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
 			{

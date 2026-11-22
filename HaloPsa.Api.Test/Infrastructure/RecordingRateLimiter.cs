@@ -10,6 +10,10 @@ internal sealed class RecordingRateLimiter : IRateLimiter
 {
 	private readonly Lock _lock = new();
 	private readonly List<string> _applied = [];
+	private readonly List<RateLimitAttempt> _appliedAttempts = [];
+	private readonly List<RateLimitAttempt> _respondedAttempts = [];
+	private readonly List<RateLimitAttempt> _failedAttempts = [];
+	private readonly List<RateLimitResponse> _responseViews = [];
 	private readonly List<HttpStatusCode> _responses = [];
 	private readonly List<Type> _failures = [];
 
@@ -53,6 +57,62 @@ internal sealed class RecordingRateLimiter : IRateLimiter
 	}
 
 	/// <summary>
+	/// The attempt passed to <see cref="ApplyRateLimitingAsync"/> each time a slot was granted
+	/// </summary>
+	public IReadOnlyList<RateLimitAttempt> AppliedAttempts
+	{
+		get
+		{
+			lock (_lock)
+			{
+				return [.. _appliedAttempts];
+			}
+		}
+	}
+
+	/// <summary>
+	/// The attempt passed to <see cref="OnResponse"/> each time
+	/// </summary>
+	public IReadOnlyList<RateLimitAttempt> RespondedAttempts
+	{
+		get
+		{
+			lock (_lock)
+			{
+				return [.. _respondedAttempts];
+			}
+		}
+	}
+
+	/// <summary>
+	/// The attempt passed to <see cref="OnSendFailed"/> each time
+	/// </summary>
+	public IReadOnlyList<RateLimitAttempt> FailedAttempts
+	{
+		get
+		{
+			lock (_lock)
+			{
+				return [.. _failedAttempts];
+			}
+		}
+	}
+
+	/// <summary>
+	/// The response view passed to <see cref="OnResponse"/> each time
+	/// </summary>
+	public IReadOnlyList<RateLimitResponse> ResponseViews
+	{
+		get
+		{
+			lock (_lock)
+			{
+				return [.. _responseViews];
+			}
+		}
+	}
+
+	/// <summary>
 	/// Status code of every response reported through <see cref="OnResponse"/>
 	/// </summary>
 	public IReadOnlyList<HttpStatusCode> Responses
@@ -80,42 +140,46 @@ internal sealed class RecordingRateLimiter : IRateLimiter
 		}
 	}
 
-	public async Task ApplyRateLimitingAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+	public async Task ApplyRateLimitingAsync(RateLimitAttempt attempt, CancellationToken cancellationToken)
 	{
 		if (DelayBeforeSlot > TimeSpan.Zero)
 		{
 			await Task.Delay(DelayBeforeSlot, cancellationToken).ConfigureAwait(false);
 		}
 
-		if (ThrowOnApply is not null && (ThrowOnApplyForPath is null || request.RequestUri!.AbsolutePath == ThrowOnApplyForPath))
+		if (ThrowOnApply is not null && (ThrowOnApplyForPath is null || attempt.RequestUri!.AbsolutePath == ThrowOnApplyForPath))
 		{
 			throw ThrowOnApply;
 		}
 
 		lock (_lock)
 		{
-			_applied.Add($"{request.Method} {request.RequestUri!.AbsolutePath}");
+			_applied.Add($"{attempt.Method} {attempt.RequestUri!.AbsolutePath}");
+			_appliedAttempts.Add(attempt);
 		}
 	}
 
-	public void OnResponse(HttpRequestMessage request, HttpResponseMessage response)
+	public void OnResponse(RateLimitAttempt attempt, RateLimitResponse response)
 	{
 		lock (_lock)
 		{
 			_responses.Add(response.StatusCode);
+			_respondedAttempts.Add(attempt);
+			_responseViews.Add(response);
 		}
 
-		if (ThrowOnResponse is not null && request.RequestUri!.AbsolutePath == ThrowOnResponseForPath)
+		if (ThrowOnResponse is not null && attempt.RequestUri!.AbsolutePath == ThrowOnResponseForPath)
 		{
 			throw ThrowOnResponse;
 		}
 	}
 
-	public void OnSendFailed(HttpRequestMessage request, Exception exception)
+	public void OnSendFailed(RateLimitAttempt attempt, Exception exception)
 	{
 		lock (_lock)
 		{
 			_failures.Add(exception.GetType());
+			_failedAttempts.Add(attempt);
 		}
 	}
 }

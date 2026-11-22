@@ -47,9 +47,9 @@ internal static class DefaultHttpClientFactory
 	private static DelegatingHandler BuildHandlerChain(HaloClientOptions options, Func<HttpMessageHandler> createTransport)
 	{
 		// Handler order matters: authentication sits above the transport and error handling is outermost. The rate limiter, when set, is innermost so every attempt, 401 re-send and token request takes a slot.
-		DelegatingHandler chain = new AuthenticationHandler(options, WithRateLimiting(options, createTransport()))
+		DelegatingHandler chain = new AuthenticationHandler(options, WithRateLimiting(options, createTransport(), isTokenRequest: true))
 		{
-			InnerHandler = WithRateLimiting(options, createTransport())
+			InnerHandler = WithRateLimiting(options, createTransport(), isTokenRequest: false)
 		};
 
 		if (options.MaxRetryAttempts > 0)
@@ -85,8 +85,8 @@ internal static class DefaultHttpClientFactory
 		return chain;
 	}
 
-	private static HttpMessageHandler WithRateLimiting(HaloClientOptions options, HttpMessageHandler transport)
+	private static HttpMessageHandler WithRateLimiting(HaloClientOptions options, HttpMessageHandler transport, bool isTokenRequest)
 		=> options.RateLimiter is null
 			? transport
-			: new RateLimitHandler(options.RateLimiter, options.RequestTimeout) { InnerHandler = transport };
+			: new RateLimitHandler(options.RateLimiter, options.RequestTimeout, isTokenRequest) { InnerHandler = transport };
 }
