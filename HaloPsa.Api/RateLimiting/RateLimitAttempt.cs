@@ -9,8 +9,14 @@ namespace HaloPsa.Api.RateLimiting;
 /// </remarks>
 public sealed class RateLimitAttempt
 {
-	internal RateLimitAttempt(HttpMethod method, Uri? requestUri, bool isTokenRequest)
+	/// <summary>Creates a view of one attempt; public so a limiter's own tests can create one</summary>
+	/// <param name="method">The HTTP method of the request</param>
+	/// <param name="requestUri">The URI the request is sent to</param>
+	/// <param name="isTokenRequest">True when the attempt is a request for an access token</param>
+	public RateLimitAttempt(HttpMethod method, Uri? requestUri, bool isTokenRequest)
 	{
+		ArgumentNullException.ThrowIfNull(method);
+
 		Method = method;
 		RequestUri = requestUri;
 		IsTokenRequest = isTokenRequest;

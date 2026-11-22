@@ -826,9 +826,11 @@ public class RateLimitHandlerTests
 			"IRateLimiter.ApplyRateLimitingAsync(RateLimitAttempt, CancellationToken): Task",
 			"IRateLimiter.OnResponse(RateLimitAttempt, RateLimitResponse): Void",
 			"IRateLimiter.OnSendFailed(RateLimitAttempt, Exception): Void",
+			"RateLimitAttempt..ctor(HttpMethod, Uri, Boolean)",
 			"RateLimitAttempt.IsTokenRequest: Boolean { get; }",
 			"RateLimitAttempt.Method: HttpMethod { get; }",
 			"RateLimitAttempt.RequestUri: Uri { get; }",
+			"RateLimitResponse..ctor(HttpStatusCode, RetryConditionHeaderValue)",
 			"RateLimitResponse.RetryAfter: RetryConditionHeaderValue { get; }",
 			"RateLimitResponse.StatusCode: HttpStatusCode { get; }"
 		]);

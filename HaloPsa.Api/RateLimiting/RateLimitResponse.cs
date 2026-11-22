@@ -7,7 +7,10 @@ namespace HaloPsa.Api.RateLimiting;
 /// <remarks>It carries only the status and the Retry-After value, never a header collection or a body.</remarks>
 public sealed class RateLimitResponse
 {
-	internal RateLimitResponse(HttpStatusCode statusCode, RetryConditionHeaderValue? retryAfter)
+	/// <summary>Creates a view of a response; public so a limiter's own tests can create one</summary>
+	/// <param name="statusCode">The status code of the response</param>
+	/// <param name="retryAfter">The Retry-After header value as received, or null when the response had none</param>
+	public RateLimitResponse(HttpStatusCode statusCode, RetryConditionHeaderValue? retryAfter)
 	{
 		StatusCode = statusCode;
 		RetryAfter = retryAfter;
