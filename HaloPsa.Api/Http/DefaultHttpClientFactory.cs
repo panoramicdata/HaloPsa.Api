@@ -59,6 +59,7 @@ internal static class DefaultHttpClientFactory
 				options.RetryDelay,
 				options.UseExponentialBackoff,
 				options.MaxRetryDelay,
+				options.RateLimiter is not null,
 				options.Logger)
 			{
 				InnerHandler = chain

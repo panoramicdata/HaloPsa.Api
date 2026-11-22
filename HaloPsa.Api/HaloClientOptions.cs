@@ -34,7 +34,7 @@ public class HaloClientOptions
 	public TimeSpan RequestTimeout { get; init; } = TimeSpan.FromSeconds(30);
 
 	/// <summary>
-	/// Gets or sets the maximum number of retry attempts for failed requests; a 429 Too Many Requests is never retried, and a POST is never retried. Default is 3
+	/// Gets or sets the maximum number of retry attempts for failed requests; a POST is never retried, except on a 429 Too Many Requests when no <see cref="RateLimiter"/> is set; with one set, a 429 is never retried. Default is 3
 	/// </summary>
 	public int MaxRetryAttempts { get; init; } = 3;
 

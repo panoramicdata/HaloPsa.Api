@@ -14,7 +14,7 @@ internal sealed partial class RetryHandler
 		HttpStatusCode.GatewayTimeout
 	];
 
-	private static bool ShouldRetry(HttpMethod method, HttpResponseMessage response)
+	private bool ShouldRetry(HttpMethod method, HttpResponseMessage response)
 		=> !response.IsSuccessStatusCode && MayRetry(method, response.StatusCode);
 
 	private TimeSpan CalculateDelay(int attemptNumber)
@@ -29,15 +29,19 @@ internal sealed partial class RetryHandler
 		return exponentialDelay > _maxRetryDelay ? _maxRetryDelay : exponentialDelay;
 	}
 
-	// A failed POST may already have been processed, so it is never re-sent.
-	private static bool MayRetry(HttpMethod method, HttpStatusCode statusCode)
-		=> IsRetryableStatusCode(statusCode) && method != HttpMethod.Post;
+	// A failed POST may already have been processed, so it is never re-sent; the exception is a 429, which Halo answers unprocessed, when no rate limiter is set.
+	private bool MayRetry(HttpMethod method, HttpStatusCode statusCode)
+		=> IsRetryableStatusCode(statusCode) && (method != HttpMethod.Post || RetriesTooManyRequests(statusCode));
 
 	private static bool MayRetry(HttpMethod method, Exception ex)
 		=> IsRetryableException(ex) && method != HttpMethod.Post;
 
-	private static bool IsRetryableStatusCode(HttpStatusCode statusCode)
-		=> _retryableStatusCodes.Contains(statusCode);
+	private bool IsRetryableStatusCode(HttpStatusCode statusCode)
+		=> _retryableStatusCodes.Contains(statusCode) || RetriesTooManyRequests(statusCode);
+
+	// With a limiter, a 429 is left to it: the limit is spent, so an immediate retry cannot succeed.
+	private bool RetriesTooManyRequests(HttpStatusCode statusCode)
+		=> !_hasRateLimiter && statusCode == HttpStatusCode.TooManyRequests;
 
 	private static bool IsRetryableException(Exception ex)
 		=> ex is HttpRequestException or TaskCanceledException or SocketException;
