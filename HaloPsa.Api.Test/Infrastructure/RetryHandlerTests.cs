@@ -68,6 +68,79 @@ public class RetryHandlerTests
 	}
 
 	[Fact]
+	public Task WithoutALimiter_Get_IsRetriedOnTooManyRequests()
+		=> AssertAttemptsAsync(HttpMethod.Get, HttpStatusCode.TooManyRequests, expectedCalls: 2, expectedStatus: HttpStatusCode.OK, hasRateLimiter: false);
+
+	[Fact]
+	public Task WithoutALimiter_Post_IsRetriedOnTooManyRequests()
+		=> AssertAttemptsAsync(HttpMethod.Post, HttpStatusCode.TooManyRequests, expectedCalls: 2, expectedStatus: HttpStatusCode.OK, hasRateLimiter: false);
+
+	[Fact]
+	public Task WithoutALimiter_Post_IsNotRetriedOnAServerError()
+		=> AssertAttemptsAsync(HttpMethod.Post, HttpStatusCode.ServiceUnavailable, expectedCalls: 1, expectedStatus: HttpStatusCode.ServiceUnavailable, hasRateLimiter: false);
+
+	[Fact]
+	public async Task WithoutALimiter_Post_RetriedOnTooManyRequests_ResendsTheSameBody()
+	{
+		var stub = new SequencingHandler(HttpStatusCode.TooManyRequests, HttpStatusCode.OK)
+		{
+			ResponseBody = """{"id":901,"summary":"S","status_id":1,"client_id":801,"user_id":802}"""
+		};
+		using var handler = CreateRetryHandler(stub, hasRateLimiter: false);
+		using var httpClient = new HttpClient(handler, disposeHandler: false) { BaseAddress = new Uri("https://example.invalid") };
+		var psa = new PsaApi(httpClient, readOnly: false);
+
+		var response = await psa.Tickets.CreateAsync(new CreateTicketRequest { Summary = "S", ClientId = 801, UserId = 802 }, TestContext.Current.CancellationToken);
+
+		_ = stub.CallCount.Should().Be(2);
+		_ = stub.RequestBodies[0].Should().Contain("\"client_id\":801");
+		_ = stub.RequestBodies[1].Should().Be(stub.RequestBodies[0]);
+		_ = response.TicketId.Should().Be(901);
+	}
+
+	[Fact]
+	public async Task WithoutALimiter_FinalFailure_ReturnsABareResponseWithoutTheLastHeadersOrBody()
+	{
+		var last = new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+		{
+			Content = new StringContent("{\"error\":\"busy\"}", Encoding.UTF8, "application/json")
+		};
+		last.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromSeconds(120));
+		var stub = new SequencingHandler(HttpStatusCode.ServiceUnavailable, HttpStatusCode.ServiceUnavailable, last);
+
+		using var response = await SendThroughRetryHandlerAsync(stub, HttpMethod.Get, TestContext.Current.CancellationToken, hasRateLimiter: false);
+
+		_ = stub.CallCount.Should().Be(3);
+		_ = response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+		_ = response.ReasonPhrase.Should().Be("Failed after 3 attempts");
+		_ = response.Headers.RetryAfter.Should().BeNull();
+		_ = (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).Should().BeEmpty();
+	}
+
+	[Fact]
+	public async Task WithoutALimiter_Post_RetriedOnTooManyRequestsThenAnotherError_IsNotLoggedAsASuccess()
+	{
+		var stub = new SequencingHandler(HttpStatusCode.TooManyRequests, HttpStatusCode.InternalServerError);
+		var logger = new ListLogger();
+
+		using var response = await SendThroughRetryHandlerAsync(stub, HttpMethod.Post, TestContext.Current.CancellationToken, logger, hasRateLimiter: false);
+
+		_ = response.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
+		_ = logger.Messages.Should().NotContain(message => message.Contains("succeeded", StringComparison.Ordinal));
+	}
+
+	[Fact]
+	public async Task WithoutALimiter_Post_RetriedOnTooManyRequestsThenOk_IsLoggedAsASuccessOnTheSecondAttempt()
+	{
+		var stub = new SequencingHandler(HttpStatusCode.TooManyRequests, HttpStatusCode.OK);
+		var logger = new ListLogger();
+
+		using var response = await SendThroughRetryHandlerAsync(stub, HttpMethod.Post, TestContext.Current.CancellationToken, logger, hasRateLimiter: false);
+
+		_ = logger.Messages.Should().ContainSingle(message => message.Contains("succeeded on attempt 2", StringComparison.Ordinal));
+	}
+
+	[Fact]
 	public Task Get_IsStillRetriedOnAServerError()
 		=> AssertAttemptsAsync(HttpMethod.Get, HttpStatusCode.ServiceUnavailable, expectedCalls: 2, expectedStatus: HttpStatusCode.OK);
 
@@ -86,30 +159,31 @@ public class RetryHandlerTests
 		_ = stub.CallCount.Should().Be(1);
 	}
 
-	private static async Task AssertAttemptsAsync(HttpMethod method, HttpStatusCode firstOutcome, int expectedCalls, HttpStatusCode expectedStatus)
+	private static async Task AssertAttemptsAsync(HttpMethod method, HttpStatusCode firstOutcome, int expectedCalls, HttpStatusCode expectedStatus, bool hasRateLimiter = true)
 	{
 		var stub = new SequencingHandler(firstOutcome, HttpStatusCode.OK);
 
-		using var response = await SendThroughRetryHandlerAsync(stub, method, TestContext.Current.CancellationToken);
+		using var response = await SendThroughRetryHandlerAsync(stub, method, TestContext.Current.CancellationToken, hasRateLimiter: hasRateLimiter);
 
 		_ = stub.CallCount.Should().Be(expectedCalls);
 		_ = response.StatusCode.Should().Be(expectedStatus);
 	}
 
-	private static RetryHandler CreateRetryHandler(SequencingHandler stub, Microsoft.Extensions.Logging.ILogger? logger = null)
+	private static RetryHandler CreateRetryHandler(SequencingHandler stub, Microsoft.Extensions.Logging.ILogger? logger = null, bool hasRateLimiter = true)
 		=> new(
 			maxRetryAttempts: 2,
 			retryDelay: TimeSpan.FromMilliseconds(1),
 			useExponentialBackoff: false,
 			maxRetryDelay: TimeSpan.FromMilliseconds(1),
+			hasRateLimiter: hasRateLimiter,
 			logger: logger)
 		{
 			InnerHandler = stub
 		};
 
-	private static async Task<HttpResponseMessage> SendThroughRetryHandlerAsync(SequencingHandler stub, HttpMethod method, CancellationToken cancellationToken, Microsoft.Extensions.Logging.ILogger? logger = null)
+	private static async Task<HttpResponseMessage> SendThroughRetryHandlerAsync(SequencingHandler stub, HttpMethod method, CancellationToken cancellationToken, Microsoft.Extensions.Logging.ILogger? logger = null, bool hasRateLimiter = true)
 	{
-		using var handler = CreateRetryHandler(stub, logger);
+		using var handler = CreateRetryHandler(stub, logger, hasRateLimiter);
 		using var invoker = new HttpMessageInvoker(handler, disposeHandler: false);
 		using var request = new HttpRequestMessage(method, _url);
 

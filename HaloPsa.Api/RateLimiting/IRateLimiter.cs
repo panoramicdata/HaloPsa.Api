@@ -10,7 +10,9 @@ namespace HaloPsa.Api.RateLimiting;
 /// <item>Retries re-send the same <see cref="HttpRequestMessage"/> instance, so <see cref="ApplyRateLimitingAsync"/> can see one instance several times, one attempt after another.
 /// The re-send after a 401 and each token request are different instances.</item>
 /// <item>With a limiter, <see cref="HaloClientOptions.RequestTimeout"/> applies to each attempt and starts once the slot is acquired. A timed-out attempt of a request that is not a POST is retried like other transient failures, taking another slot, and a call has no overall timeout: use the caller's <see cref="CancellationToken"/> to bound it.</item>
+/// <item>With a limiter, a 429 Too Many Requests is not retried. It means the shared request limit is already spent, and Halo can keep refusing requests for minutes, often with no Retry-After, so a quick retry only sends another request into a blocked limit. The limiter sees the 429 in <see cref="OnResponse"/> and decides when to send again; a <c>Psa</c> call raises <see cref="HaloRateLimitException"/>.</item>
 /// <item>To give up, throw <see cref="HaloRequestNotSentException"/>. Throwing <see cref="TaskCanceledException"/> instead is treated as a transient failure and retried.</item>
+/// <item>Security: an implementation is handed the full request and response, which carry the <c>Authorization</c> bearer header on API requests, <c>client_id</c> and <c>client_secret</c> in the token request's form body, and <c>access_token</c> in the token response. It must not log or store request or response contents or headers.</item>
 /// </list>
 /// </remarks>
 public interface IRateLimiter

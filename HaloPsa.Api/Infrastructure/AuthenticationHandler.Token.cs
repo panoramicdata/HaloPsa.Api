@@ -50,8 +50,7 @@ internal sealed partial class AuthenticationHandler
 				LogTokenRefreshed(_options.Logger, _tokenExpiry);
 			}
 		}
-		catch (Exception ex) when (ex is not AuthenticationException and not HaloRequestNotSentException
-			&& !(ex is OperationCanceledException && cancellationToken.IsCancellationRequested))
+		catch (Exception ex) when (IsWrappedAsAuthenticationFailure(ex, cancellationToken))
 		{
 			if (_options.Logger != null)
 			{
@@ -61,6 +60,12 @@ internal sealed partial class AuthenticationHandler
 			throw new AuthenticationException("Failed to obtain access token from Halo API", ex);
 		}
 	}
+
+	// Without a limiter, callers rely on every token failure, their own cancellation included, arriving as an AuthenticationException
+	private bool IsWrappedAsAuthenticationFailure(Exception ex, CancellationToken cancellationToken)
+		=> ex is not AuthenticationException
+			&& (_options.RateLimiter is null
+				|| (ex is not HaloRequestNotSentException && !(ex is OperationCanceledException && cancellationToken.IsCancellationRequested)));
 
 	private async Task<TokenResponse> RequestTokenAsync(CancellationToken cancellationToken)
 	{

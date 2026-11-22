@@ -124,7 +124,7 @@ public class RateLimitHandlerTests
 	}
 
 	[Fact]
-	public async Task CancellingTheTokenRequest_WithoutALimiter_ReachesTheCallerAsACancellation()
+	public async Task CancellingTheTokenRequest_WithoutALimiter_IsWrappedInAnAuthenticationException()
 	{
 		var stub = new HaloStub(Statuses(HttpStatusCode.OK), HttpStatusCode.OK) { TokenDelay = TimeSpan.FromSeconds(10) };
 		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter: null, maxRetryAttempts: 0, TimeSpan.FromSeconds(30)), () => stub);
@@ -133,7 +133,8 @@ public class RateLimitHandlerTests
 
 		var act = () => http.GetAsync("/api/Tickets", cancellation.Token);
 
-		_ = await act.Should().ThrowAsync<OperationCanceledException>();
+		var thrown = (await act.Should().ThrowExactlyAsync<AuthenticationException>()).Which;
+		_ = thrown.InnerException.Should().BeAssignableTo<OperationCanceledException>();
 	}
 
 	[Fact]
@@ -175,7 +176,7 @@ public class RateLimitHandlerTests
 			response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromSeconds(30));
 			return Task.FromResult(response);
 		}, HttpStatusCode.OK);
-		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter: null, maxRetryAttempts: 3, TimeSpan.FromSeconds(30)), () => stub);
+		using var http = DefaultHttpClientFactory.Create(CreateOptions(new RecordingRateLimiter(), maxRetryAttempts: 3, TimeSpan.FromSeconds(30)), () => stub);
 		var psa = new PsaApi(http, readOnly: false);
 
 		var act = () => psa.Statuses.GetAllAsync(TestContext.Current.CancellationToken);
@@ -183,6 +184,37 @@ public class RateLimitHandlerTests
 		var thrown = (await act.Should().ThrowExactlyAsync<HaloRateLimitException>()).Which;
 		_ = thrown.RetryAfterSeconds.Should().Be(30);
 		_ = stub.CallCount.Should().Be(2);
+	}
+
+	[Fact]
+	public async Task WithoutALimiter_AnApiTooManyRequests_IsRetried()
+	{
+		var stub = new HaloStub(Statuses(HttpStatusCode.TooManyRequests, HttpStatusCode.OK), HttpStatusCode.OK);
+		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter: null, maxRetryAttempts: 3, TimeSpan.FromSeconds(30)), () => stub);
+
+		using var response = await http.GetAsync("/api/Tickets", TestContext.Current.CancellationToken);
+
+		_ = response.StatusCode.Should().Be(HttpStatusCode.OK);
+		_ = stub.CallCount.Should().Be(3);
+	}
+
+	[Fact]
+	public async Task WithoutALimiter_AnApiTooManyRequestsThatPersists_IsRetriedThenReachesAPsaCallerWithoutRetryAfter()
+	{
+		var stub = new HaloStub((_, _) =>
+		{
+			var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests) { Content = new StringContent("slow down") };
+			response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromSeconds(30));
+			return Task.FromResult(response);
+		}, HttpStatusCode.OK);
+		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter: null, maxRetryAttempts: 3, TimeSpan.FromSeconds(30)), () => stub);
+		var psa = new PsaApi(http, readOnly: false);
+
+		var act = () => psa.Statuses.GetAllAsync(TestContext.Current.CancellationToken);
+
+		var thrown = (await act.Should().ThrowExactlyAsync<HaloRateLimitException>()).Which;
+		_ = thrown.RetryAfterSeconds.Should().BeNull();
+		_ = stub.CallCount.Should().Be(5);
 	}
 
 	[Fact]
@@ -247,15 +279,15 @@ public class RateLimitHandlerTests
 	}
 
 	[Fact]
-	public async Task WithoutALimiter_ATokenRequestThatTimesOut_SurfacesAsATimeoutNotAnAuthenticationException()
+	public async Task WithoutALimiter_ATokenRequestThatTimesOut_SurfacesAsAnAuthenticationException()
 	{
 		var stub = new HaloStub(Statuses(HttpStatusCode.OK), HttpStatusCode.OK) { TokenDelay = TimeSpan.FromSeconds(10) };
 		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter: null, maxRetryAttempts: 0, TimeSpan.FromMilliseconds(100)), () => stub);
 
 		var act = () => http.GetAsync("/api/Tickets", TestContext.Current.CancellationToken);
 
-		var thrown = (await act.Should().ThrowExactlyAsync<TaskCanceledException>()).Which;
-		_ = thrown.InnerException.Should().BeOfType<TimeoutException>();
+		var thrown = (await act.Should().ThrowExactlyAsync<AuthenticationException>()).Which;
+		_ = thrown.InnerException.Should().BeAssignableTo<OperationCanceledException>();
 	}
 
 	[Fact]

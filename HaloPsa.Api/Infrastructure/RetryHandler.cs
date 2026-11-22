@@ -12,12 +12,14 @@ internal sealed partial class RetryHandler(
 	TimeSpan retryDelay,
 	bool useExponentialBackoff,
 	TimeSpan maxRetryDelay,
+	bool hasRateLimiter,
 	ILogger? logger) : DelegatingHandler
 {
 	private readonly int _maxRetryAttempts = maxRetryAttempts;
 	private readonly TimeSpan _retryDelay = retryDelay;
 	private readonly bool _useExponentialBackoff = useExponentialBackoff;
 	private readonly TimeSpan _maxRetryDelay = maxRetryDelay;
+	private readonly bool _hasRateLimiter = hasRateLimiter;
 	private readonly ILogger? _logger = logger;
 
 	protected override async Task<HttpResponseMessage> SendAsync(
@@ -63,11 +65,25 @@ internal sealed partial class RetryHandler(
 
 	private HttpResponseMessage CreateFinalFailureResponse(HttpRequestMessage request, HttpResponseMessage response)
 	{
+		var statusCode = response.StatusCode;
+
 		if (_logger?.IsEnabled(LogLevel.Warning) == true)
 		{
-			LogFinalFailureStatus(_logger, _maxRetryAttempts + 1, request.Method, request.RequestUri, response.StatusCode);
+			LogFinalFailureStatus(_logger, _maxRetryAttempts + 1, request.Method, request.RequestUri, statusCode);
 		}
 
-		return response;
+		// A limiter needs the real final response to see a 429 and its Retry-After; other clients keep the bare one for compatibility
+		if (_hasRateLimiter)
+		{
+			return response;
+		}
+
+		response.Dispose();
+
+		return new HttpResponseMessage(statusCode)
+		{
+			RequestMessage = request,
+			ReasonPhrase = $"Failed after {_maxRetryAttempts + 1} attempts"
+		};
 	}
 }
