@@ -140,6 +140,21 @@ public class RetryHandlerTests
 		_ = logger.Messages.Should().ContainSingle(message => message.Contains("succeeded on attempt 2", StringComparison.Ordinal));
 	}
 
+	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
+	public async Task RetriesExhausted_LogsOneWarningWithTheAttemptsMethodUriAndStatus(bool hasRateLimiter)
+	{
+		var stub = new SequencingHandler(HttpStatusCode.ServiceUnavailable, HttpStatusCode.ServiceUnavailable, HttpStatusCode.ServiceUnavailable);
+		var logger = new ListLogger();
+
+		using var response = await SendThroughRetryHandlerAsync(stub, HttpMethod.Get, TestContext.Current.CancellationToken, logger, hasRateLimiter);
+
+		_ = stub.CallCount.Should().Be(3);
+		_ = logger.Messages.Should().ContainSingle(message => message.Contains("failed after", StringComparison.Ordinal))
+			.Which.Should().Be($"Warning: HTTP request failed after 3 attempts for GET {_url} with status ServiceUnavailable");
+	}
+
 	[Fact]
 	public Task Get_IsStillRetriedOnAServerError()
 		=> AssertAttemptsAsync(HttpMethod.Get, HttpStatusCode.ServiceUnavailable, expectedCalls: 2, expectedStatus: HttpStatusCode.OK);

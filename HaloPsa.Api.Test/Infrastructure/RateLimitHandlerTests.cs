@@ -103,7 +103,8 @@ public class RateLimitHandlerTests
 		_ = await act.Should().ThrowAsync<OperationCanceledException>();
 		_ = stub.CallCount.Should().Be(0);
 		_ = limiter.Applied.Should().BeEmpty();
-		_ = limiter.Failures.Should().ContainSingle();
+		_ = limiter.Failures.Should().BeEmpty();
+		_ = limiter.Responses.Should().BeEmpty();
 	}
 
 	[Fact]
@@ -120,7 +121,8 @@ public class RateLimitHandlerTests
 		_ = await act.Should().ThrowAsync<OperationCanceledException>();
 		_ = stub.CallCount.Should().Be(0);
 		_ = limiter.Applied.Should().BeEmpty();
-		_ = limiter.Failures.Should().ContainSingle().Which.Should().BeAssignableTo<OperationCanceledException>();
+		_ = limiter.Failures.Should().BeEmpty();
+		_ = limiter.Responses.Should().BeEmpty();
 	}
 
 	[Fact]
@@ -165,6 +167,115 @@ public class RateLimitHandlerTests
 		_ = limiter.Applied.Should().BeEmpty();
 		_ = limiter.Failures.Should().BeEmpty();
 		_ = limiter.Responses.Should().BeEmpty();
+	}
+
+	[Fact]
+	public async Task ACallerCancelledWait_GetsNoCallback_AndALimiterCountingPermitsStaysBalanced()
+	{
+		var limiter = new PermitCountingRateLimiter { DelayBeforeSlot = TimeSpan.FromSeconds(10) };
+		var stub = new HaloStub(Statuses(HttpStatusCode.OK), HttpStatusCode.OK);
+		using var handler = new RateLimitHandler(limiter, TimeSpan.FromSeconds(30)) { InnerHandler = stub };
+		using var invoker = new HttpMessageInvoker(handler, disposeHandler: false);
+		using var request = new HttpRequestMessage(HttpMethod.Get, "https://example.halopsa.com/api/Tickets");
+		using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+		cancellation.CancelAfter(TimeSpan.FromMilliseconds(100));
+
+		var act = () => invoker.SendAsync(request, cancellation.Token);
+
+		var thrown = (await act.Should().ThrowAsync<OperationCanceledException>()).Which;
+		_ = thrown.CancellationToken.Should().Be(cancellation.Token);
+		_ = stub.CallCount.Should().Be(0);
+		_ = limiter.ResponseCalls.Should().Be(0);
+		_ = limiter.SendFailedCalls.Should().Be(0);
+		_ = limiter.LowestHeldPermits.Should().Be(0);
+		_ = limiter.HeldPermits.Should().Be(0);
+	}
+
+	[Fact]
+	public async Task ALimitersOwnCancellation_GetsNoCallback_IsRetried_AndALimiterCountingPermitsStaysBalanced()
+	{
+		var limiter = new PermitCountingRateLimiter { OwnCancellationPath = "/api/Tickets", OwnCancellationCount = 1 };
+		var stub = new HaloStub(Statuses(HttpStatusCode.OK), HttpStatusCode.OK);
+		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter, maxRetryAttempts: 1, TimeSpan.FromSeconds(30)), () => stub);
+
+		using var response = await http.GetAsync("/api/Tickets", TestContext.Current.CancellationToken);
+
+		_ = response.StatusCode.Should().Be(HttpStatusCode.OK);
+		_ = limiter.ApplyCalls.Should().Be(3);
+		_ = limiter.ResponseCalls.Should().Be(2);
+		_ = limiter.SendFailedCalls.Should().Be(0);
+		_ = limiter.LowestHeldPermits.Should().Be(0);
+		_ = limiter.HeldPermits.Should().Be(0);
+	}
+
+	[Fact]
+	public async Task ALimitersOwnCancellationThatKeepsHappening_ReachesTheCallerAfterTheRetries_WithoutCallbacks()
+	{
+		var limiter = new PermitCountingRateLimiter { OwnCancellationPath = "/api/Tickets", OwnCancellationCount = int.MaxValue };
+		var stub = new HaloStub(Statuses(HttpStatusCode.OK), HttpStatusCode.OK);
+		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter, maxRetryAttempts: 1, TimeSpan.FromSeconds(30)), () => stub);
+
+		var act = () => http.GetAsync("/api/Tickets", TestContext.Current.CancellationToken);
+
+		_ = await act.Should().ThrowAsync<TaskCanceledException>();
+		_ = limiter.ApplyCalls.Should().Be(3);
+		_ = limiter.ResponseCalls.Should().Be(1);
+		_ = limiter.SendFailedCalls.Should().Be(0);
+		_ = limiter.LowestHeldPermits.Should().Be(0);
+		_ = limiter.HeldPermits.Should().Be(0);
+	}
+
+	[Fact]
+	public async Task AnAttemptThatTookASlotAndTimedOut_GetsExactlyOneOnSendFailed()
+	{
+		var limiter = new PermitCountingRateLimiter();
+		var stub = new HaloStub(Stall, HttpStatusCode.OK);
+		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter, maxRetryAttempts: 0, TimeSpan.FromMilliseconds(100)), () => stub);
+
+		var act = () => http.GetAsync("/api/Tickets", TestContext.Current.CancellationToken);
+
+		_ = await act.Should().ThrowAsync<TaskCanceledException>();
+		_ = limiter.ApplyCalls.Should().Be(2);
+		_ = limiter.ResponseCalls.Should().Be(1);
+		_ = limiter.SendFailedCalls.Should().Be(1);
+		_ = limiter.LowestHeldPermits.Should().Be(0);
+		_ = limiter.HeldPermits.Should().Be(0);
+	}
+
+	[Fact]
+	public async Task AnAttemptThatTookASlotAndCouldNotStartItsTimeout_GetsExactlyOneOnSendFailed()
+	{
+		var limiter = new PermitCountingRateLimiter();
+		var stub = new HaloStub(Statuses(HttpStatusCode.OK), HttpStatusCode.OK);
+		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter, maxRetryAttempts: 0, TimeSpan.FromDays(60)), () => stub);
+
+		var act = () => http.GetAsync("/api/Tickets", TestContext.Current.CancellationToken);
+
+		var thrown = (await act.Should().ThrowExactlyAsync<AuthenticationException>()).Which;
+		_ = thrown.InnerException.Should().BeOfType<ArgumentOutOfRangeException>();
+		_ = stub.CallCount.Should().Be(0);
+		_ = limiter.ApplyCalls.Should().Be(1);
+		_ = limiter.ResponseCalls.Should().Be(0);
+		_ = limiter.SendFailedCalls.Should().Be(1);
+		_ = limiter.LowestHeldPermits.Should().Be(0);
+		_ = limiter.HeldPermits.Should().Be(0);
+	}
+
+	[Fact]
+	public async Task AnAttemptThatTookASlotAndFailedInTransit_GetsExactlyOneOnSendFailed()
+	{
+		var limiter = new PermitCountingRateLimiter();
+		var stub = new HaloStub((_, _) => throw new HttpRequestException("connection reset"), HttpStatusCode.OK);
+		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter, maxRetryAttempts: 0, TimeSpan.FromSeconds(30)), () => stub);
+
+		var act = () => http.GetAsync("/api/Tickets", TestContext.Current.CancellationToken);
+
+		_ = await act.Should().ThrowAsync<HttpRequestException>();
+		_ = limiter.ApplyCalls.Should().Be(2);
+		_ = limiter.ResponseCalls.Should().Be(1);
+		_ = limiter.SendFailedCalls.Should().Be(1);
+		_ = limiter.LowestHeldPermits.Should().Be(0);
+		_ = limiter.HeldPermits.Should().Be(0);
 	}
 
 	[Fact]
@@ -260,6 +371,40 @@ public class RateLimitHandlerTests
 		var authentication = thrown.InnerException.Should().BeOfType<AuthenticationException>().Subject;
 		var rateLimit = authentication.InnerException.Should().BeOfType<HaloRateLimitException>().Subject;
 		_ = rateLimit.RetryAfterSeconds.Should().Be(30);
+	}
+
+	[Fact]
+	public async Task ATokenTooManyRequests_IsSentOnce_AndReachesAPsaCallerInsideAnApiRequestException_WithALimiter()
+	{
+		var limiter = new RecordingRateLimiter();
+		var stub = new HaloStub(Statuses(HttpStatusCode.OK), HttpStatusCode.TooManyRequests) { TokenRetryAfter = TimeSpan.FromSeconds(30) };
+		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter, maxRetryAttempts: 3, TimeSpan.FromSeconds(30)), () => stub);
+		var psa = new PsaApi(http, readOnly: false);
+
+		var act = () => psa.Statuses.GetAllAsync(TestContext.Current.CancellationToken);
+
+		var thrown = (await act.Should().ThrowExactlyAsync<ApiRequestException>()).Which;
+		var authentication = thrown.InnerException.Should().BeOfType<AuthenticationException>().Subject;
+		_ = authentication.InnerException.Should().BeOfType<HaloRateLimitException>();
+		_ = stub.TokenCalls.Should().Be(1);
+		_ = stub.CallCount.Should().Be(1);
+		_ = limiter.Applied.Should().Equal(_tokenRequest);
+	}
+
+	[Fact]
+	public async Task WithoutALimiter_ATokenTooManyRequests_IsSentOnce_AndReachesAPsaCallerInsideAnApiRequestException()
+	{
+		var stub = new HaloStub(Statuses(HttpStatusCode.OK), HttpStatusCode.TooManyRequests) { TokenRetryAfter = TimeSpan.FromSeconds(30) };
+		using var http = DefaultHttpClientFactory.Create(CreateOptions(limiter: null, maxRetryAttempts: 3, TimeSpan.FromSeconds(30)), () => stub);
+		var psa = new PsaApi(http, readOnly: false);
+
+		var act = () => psa.Statuses.GetAllAsync(TestContext.Current.CancellationToken);
+
+		var thrown = (await act.Should().ThrowExactlyAsync<ApiRequestException>()).Which;
+		var authentication = thrown.InnerException.Should().BeOfType<AuthenticationException>().Subject;
+		_ = authentication.InnerException.Should().BeOfType<HaloRateLimitException>();
+		_ = stub.TokenCalls.Should().Be(1);
+		_ = stub.CallCount.Should().Be(1);
 	}
 
 	[Fact]
@@ -512,6 +657,105 @@ public class RateLimitHandlerTests
 	}
 
 	/// <summary>
+	/// An <see cref="IRateLimiter"/> that takes a permit when <see cref="ApplyRateLimitingAsync"/> returns and releases one in each callback,
+	/// like a limiter bounding the requests in flight
+	/// </summary>
+	private sealed class PermitCountingRateLimiter : IRateLimiter
+	{
+		private readonly Lock _lock = new();
+		private int _applyCalls;
+		private int _ownCancellations;
+		private int _heldPermits;
+		private int _lowestHeldPermits;
+		private int _responseCalls;
+		private int _sendFailedCalls;
+
+		/// <summary>
+		/// How long a request waits for a slot; the wait ends early when the caller cancels
+		/// </summary>
+		public TimeSpan DelayBeforeSlot { get; init; } = TimeSpan.Zero;
+
+		/// <summary>
+		/// The absolute path whose first <see cref="OwnCancellationCount"/> applies throw the limiter's own <see cref="TaskCanceledException"/>
+		/// </summary>
+		public string? OwnCancellationPath { get; init; }
+
+		/// <summary>
+		/// How many applies for <see cref="OwnCancellationPath"/> throw the limiter's own cancellation
+		/// </summary>
+		public int OwnCancellationCount { get; init; }
+
+		public int ApplyCalls => Read(ref _applyCalls);
+
+		public int HeldPermits => Read(ref _heldPermits);
+
+		public int LowestHeldPermits => Read(ref _lowestHeldPermits);
+
+		public int ResponseCalls => Read(ref _responseCalls);
+
+		public int SendFailedCalls => Read(ref _sendFailedCalls);
+
+		public async Task ApplyRateLimitingAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+		{
+			if (DelayBeforeSlot > TimeSpan.Zero)
+			{
+				await Task.Delay(DelayBeforeSlot, cancellationToken).ConfigureAwait(false);
+			}
+
+			lock (_lock)
+			{
+				_applyCalls++;
+
+				if (request.RequestUri!.AbsolutePath == OwnCancellationPath && _ownCancellations < OwnCancellationCount)
+				{
+					_ownCancellations++;
+					throw new TaskCanceledException("The limiter's own wait for a slot ran out.");
+				}
+
+				_heldPermits++;
+			}
+		}
+
+		public void OnResponse(HttpRequestMessage request, HttpResponseMessage response)
+		{
+			ArgumentNullException.ThrowIfNull(request);
+			ArgumentNullException.ThrowIfNull(response);
+
+			lock (_lock)
+			{
+				_responseCalls++;
+				ReleasePermit();
+			}
+		}
+
+		public void OnSendFailed(HttpRequestMessage request, Exception exception)
+		{
+			ArgumentNullException.ThrowIfNull(request);
+			ArgumentNullException.ThrowIfNull(exception);
+
+			lock (_lock)
+			{
+				_sendFailedCalls++;
+				ReleasePermit();
+			}
+		}
+
+		private void ReleasePermit()
+		{
+			_heldPermits--;
+			_lowestHeldPermits = Math.Min(_lowestHeldPermits, _heldPermits);
+		}
+
+		private int Read(ref int field)
+		{
+			lock (_lock)
+			{
+				return field;
+			}
+		}
+	}
+
+	/// <summary>
 	/// A body that takes <see cref="BodyDelay"/> to be written, honouring cancellation, and records its disposal
 	/// </summary>
 	private sealed class RecordingContent : HttpContent
@@ -566,12 +810,19 @@ public class RateLimitHandlerTests
 		/// </summary>
 		public int CallCount { get; private set; }
 
+		/// <summary>
+		/// The token requests that reached the transport
+		/// </summary>
+		public int TokenCalls { get; private set; }
+
 		protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
 		{
 			CallCount++;
 
 			if (request.RequestUri!.AbsolutePath == "/auth/token")
 			{
+				TokenCalls++;
+
 				if (TokenDelay > TimeSpan.Zero)
 				{
 					await Task.Delay(TokenDelay, cancellationToken).ConfigureAwait(false);
