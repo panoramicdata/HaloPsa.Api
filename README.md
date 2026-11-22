@@ -216,7 +216,7 @@ public sealed class MinimumIntervalLimiter(TimeSpan interval) : IRateLimiter
     private readonly SemaphoreSlim _gate = new(1, 1);
     private DateTime _next = DateTime.MinValue;
 
-    public async Task ApplyRateLimitingAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    public async Task ApplyRateLimitingAsync(RateLimitAttempt attempt, CancellationToken cancellationToken)
     {
         await _gate.WaitAsync(cancellationToken);
         try
@@ -235,11 +235,11 @@ public sealed class MinimumIntervalLimiter(TimeSpan interval) : IRateLimiter
         }
     }
 
-    public void OnResponse(HttpRequestMessage request, HttpResponseMessage response)
+    public void OnResponse(RateLimitAttempt attempt, RateLimitResponse response)
     {
     }
 
-    public void OnSendFailed(HttpRequestMessage request, Exception exception)
+    public void OnSendFailed(RateLimitAttempt attempt, Exception exception)
     {
     }
 }
@@ -252,7 +252,8 @@ var options = new HaloClientOptions
 ```
 
 - With a limiter, `RequestTimeout` applies to each attempt and starts once the attempt's slot is acquired. A timed-out attempt of a request that is not a POST is retried, taking another slot, and a call has no overall timeout: pass a `CancellationToken` to bound it.
-- `IRateLimiter` is handed the full request and response, which carry the `Authorization` bearer header on API requests, `client_id` and `client_secret` in the token request's form body, and `access_token` in the token response. An implementation must not log or store request or response contents or headers.
+- The limiter sees the method, URI, whether it is the token request, and the response's status and Retry-After, never any other header or a body, so no credentials reach it. These arrive as a `RateLimitAttempt` (`Method`, `RequestUri`, `IsTokenRequest`) and a `RateLimitResponse` (`StatusCode`, `RetryAfter`).
+- Every attempt, including each retry, the re-send after a 401 and each token request, gets a new `RateLimitAttempt`. The instance passed to `ApplyRateLimitingAsync` is the one passed to that attempt's `OnResponse` or `OnSendFailed`, so a limiter can use it as a correlation key by reference.
 - Each `ApplyRateLimitingAsync` that returns is followed by exactly one `OnResponse` or `OnSendFailed` for that attempt. When it throws, whatever it throws (a give-up, a cancellation by the caller or by the limiter itself, any other exception), no slot was taken and the attempt gets neither, so a limiter that takes a permit in `ApplyRateLimitingAsync` and releases it in `OnResponse` or `OnSendFailed` stays balanced.
 - To give up on a request without sending it, throw `HaloRequestNotSentException` from `ApplyRateLimitingAsync`. It is never retried and is not wrapped by Refit. Do not signal a give-up with `TaskCanceledException`, which is retried as a transient failure.
 - With a limiter, a 429 Too Many Requests is never retried: it means the shared request limit is already spent, and Halo can keep refusing requests for minutes, often with no Retry-After, so the limiter, which sees the 429 in `OnResponse`, decides when to send again. Through `Psa` it raises `HaloRateLimitException` with any Retry-After; a 429 from the token endpoint arrives as Refit's `ApiRequestException` whose inner is an `AuthenticationException` wrapping the `HaloRateLimitException`. Without a limiter, a 429 on an API request is retried (a POST only on a 429), and one that lasts through every retry arrives without its Retry-After; a 429 from the token endpoint is not retried, with or without a limiter.
