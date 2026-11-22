@@ -16,7 +16,8 @@ internal sealed class RateLimitHandler(IRateLimiter rateLimiter, TimeSpan attemp
 {
 	protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
 	{
-		await WaitForSlotAsync(request, cancellationToken).ConfigureAwait(false);
+		// A throw here took no slot, so the limiter gets no callback for the attempt.
+		await rateLimiter.ApplyRateLimitingAsync(request, cancellationToken).ConfigureAwait(false);
 
 		var response = await SendAttemptAsync(request, cancellationToken).ConfigureAwait(false);
 
@@ -33,19 +34,6 @@ internal sealed class RateLimitHandler(IRateLimiter rateLimiter, TimeSpan attemp
 		return response;
 	}
 
-	private async Task WaitForSlotAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-	{
-		try
-		{
-			await rateLimiter.ApplyRateLimitingAsync(request, cancellationToken).ConfigureAwait(false);
-		}
-		catch (OperationCanceledException ex)
-		{
-			rateLimiter.OnSendFailed(request, ex);
-			throw;
-		}
-	}
-
 	// A 429 whose body cannot be read is still a 429: it is returned with an empty body so the limiter sees it and it is never retried.
 	private static bool IsUnreadableTooManyRequests(HttpResponseMessage? response, CancellationToken cancellationToken)
 		=> response is { StatusCode: HttpStatusCode.TooManyRequests } && !cancellationToken.IsCancellationRequested;
@@ -53,11 +41,11 @@ internal sealed class RateLimitHandler(IRateLimiter rateLimiter, TimeSpan attemp
 	private async Task<HttpResponseMessage> SendAttemptAsync(HttpRequestMessage request, CancellationToken cancellationToken)
 	{
 		using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-		attemptCts.CancelAfter(attemptTimeout);
 
 		HttpResponseMessage? response = null;
 		try
 		{
+			attemptCts.CancelAfter(attemptTimeout);
 			response = await base.SendAsync(request, attemptCts.Token).ConfigureAwait(false);
 			await response.Content.LoadIntoBufferAsync(attemptCts.Token).ConfigureAwait(false);
 			return response;
