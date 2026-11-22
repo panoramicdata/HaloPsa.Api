@@ -718,6 +718,9 @@ public class RateLimitHandlerTests
 
 		public void OnResponse(HttpRequestMessage request, HttpResponseMessage response)
 		{
+			ArgumentNullException.ThrowIfNull(request);
+			ArgumentNullException.ThrowIfNull(response);
+
 			lock (_lock)
 			{
 				_responseCalls++;
@@ -727,6 +730,9 @@ public class RateLimitHandlerTests
 
 		public void OnSendFailed(HttpRequestMessage request, Exception exception)
 		{
+			ArgumentNullException.ThrowIfNull(request);
+			ArgumentNullException.ThrowIfNull(exception);
+
 			lock (_lock)
 			{
 				_sendFailedCalls++;
