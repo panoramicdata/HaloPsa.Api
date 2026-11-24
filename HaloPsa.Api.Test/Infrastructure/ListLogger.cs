@@ -8,6 +8,8 @@ internal sealed class ListLogger : ILogger
 
 	public List<LogLevel> Levels { get; } = [];
 
+	public List<Exception?> Exceptions { get; } = [];
+
 	public IDisposable? BeginScope<TState>(TState state)
 		where TState : notnull
 	{
@@ -25,6 +27,7 @@ internal sealed class ListLogger : ILogger
 		ArgumentNullException.ThrowIfNull(formatter);
 
 		Levels.Add(logLevel);
+		Exceptions.Add(exception);
 		Messages.Add($"{logLevel}: {formatter(state, exception)}");
 	}
 }

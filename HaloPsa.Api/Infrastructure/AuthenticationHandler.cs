@@ -113,12 +113,13 @@ internal sealed partial class AuthenticationHandler : DelegatingHandler
 		LogLevel.Debug, new EventId(3, nameof(LogTokenRefreshed)),
 		"Successfully refreshed Halo API access token, expires at {Expiry}");
 
-	private static readonly Action<ILogger, Exception?> _logTokenRefreshFailed = LoggerMessage.Define(
-		LogLevel.Error, new EventId(4, nameof(LogTokenRefreshFailed)),
-		"Failed to refresh Halo API access token");
+	// The caller receives the failure as an exception, so it is logged at Debug only and never with the exception (#96)
+	private static readonly Action<ILogger, string, Exception?> _logTokenRefreshFailed = LoggerMessage.Define<string>(
+		LogLevel.Debug, new EventId(4, nameof(LogTokenRefreshFailed)),
+		"Failed to refresh Halo API access token: {Reason}");
 
 	private static readonly Action<ILogger, System.Net.HttpStatusCode, string, Exception?> _logAuthFailed = LoggerMessage.Define<System.Net.HttpStatusCode, string>(
-		LogLevel.Error, new EventId(5, nameof(LogAuthFailed)),
+		LogLevel.Debug, new EventId(5, nameof(LogAuthFailed)),
 		"Authentication failed: {StatusCode} - {Content}");
 
 	private static readonly Action<ILogger, string, Exception?> _logTokenResponse = LoggerMessage.Define<string>(
@@ -135,7 +136,7 @@ internal sealed partial class AuthenticationHandler : DelegatingHandler
 		=> _logTokenRefreshed(logger, expiry, null);
 
 	private static void LogTokenRefreshFailed(ILogger logger, Exception ex)
-		=> _logTokenRefreshFailed(logger, ex);
+		=> _logTokenRefreshFailed(logger, $"{ex.GetType().Name}: {ex.Message}", null);
 
 	private static void LogAuthFailed(ILogger logger, System.Net.HttpStatusCode statusCode, string content)
 		=> _logAuthFailed(logger, statusCode, content, null);

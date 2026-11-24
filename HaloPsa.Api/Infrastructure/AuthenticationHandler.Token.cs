@@ -144,9 +144,7 @@ internal sealed partial class AuthenticationHandler
 		}
 		catch (JsonException)
 		{
-			// The token endpoint can return a 2xx with a non-JSON (e.g. HTML login/error page) body.
-			// Raise a clear, specific AuthenticationException here (rather than letting the raw JsonException
-			// propagate) so RefreshTokenAsync's "ex is not AuthenticationException" filter skips its Error log.
+			// A 2xx can carry a non-JSON body, such as an HTML login page; say so rather than surface a raw JsonException
 			var excerpt = responseContent.Length > 200 ? responseContent[..200] + "..." : responseContent;
 			throw new AuthenticationException(
 				$"Failed to obtain access token: the Halo API token endpoint returned a non-JSON response. Status: {statusCode}, Content: {excerpt}");

@@ -99,11 +99,11 @@ internal sealed class LoggingHandler(
 	{
 		if (exception is HaloRequestNotSentException)
 		{
-			LogNotSent(logger, exception, requestId, request.Method, request.RequestUri, elapsed.TotalMilliseconds);
+			LogNotSent(logger, requestId, request.Method, request.RequestUri, elapsed.TotalMilliseconds);
 		}
 		else
 		{
-			LogException(logger, exception, requestId, request.Method, request.RequestUri, elapsed.TotalMilliseconds, exception.Message);
+			LogException(logger, requestId, request.Method, request.RequestUri, elapsed.TotalMilliseconds, exception.Message);
 		}
 	}
 
@@ -132,8 +132,9 @@ internal sealed class LoggingHandler(
 		new EventId(5, nameof(LogResponseHeaders)),
 		"[{RequestId}] Response Headers: {Headers}");
 
+	// The caller receives the exception, so the trace records it like a failed response, without the exception (#96)
 	private static readonly Action<ILogger, string, HttpMethod, Uri?, double, string, Exception?> _logException = LoggerMessage.Define<string, HttpMethod, Uri?, double, string>(
-		LogLevel.Error,
+		LogLevel.Warning,
 		new EventId(6, nameof(LogException)),
 		"[{RequestId}] HTTP {Method} {Uri} failed after {ElapsedMs}ms: {ErrorMessage}");
 
@@ -157,9 +158,9 @@ internal sealed class LoggingHandler(
 	private static void LogResponseHeaders(ILogger logger, string requestId, string headers)
 		=> _logResponseHeaders(logger, requestId, headers, null);
 
-	private static void LogException(ILogger logger, Exception ex, string requestId, HttpMethod method, Uri? uri, double elapsedMs, string errorMessage)
-		=> _logException(logger, requestId, method, uri, elapsedMs, errorMessage, ex);
+	private static void LogException(ILogger logger, string requestId, HttpMethod method, Uri? uri, double elapsedMs, string errorMessage)
+		=> _logException(logger, requestId, method, uri, elapsedMs, errorMessage, null);
 
-	private static void LogNotSent(ILogger logger, Exception ex, string requestId, HttpMethod method, Uri? uri, double elapsedMs)
-		=> _logNotSent(logger, requestId, method, uri, elapsedMs, ex);
+	private static void LogNotSent(ILogger logger, string requestId, HttpMethod method, Uri? uri, double elapsedMs)
+		=> _logNotSent(logger, requestId, method, uri, elapsedMs, null);
 }

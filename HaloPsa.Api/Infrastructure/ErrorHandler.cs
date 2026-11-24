@@ -20,6 +20,7 @@ internal sealed class ErrorHandler(ILogger? logger) : DelegatingHandler
 	/// <returns>The HTTP response message</returns>
 	protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
 	{
+		// Every failure here reaches the caller, so it is logged at Debug only and never with the exception (#96)
 		try
 		{
 			var response = await base.SendAsync(request, cancellationToken);
@@ -27,20 +28,20 @@ internal sealed class ErrorHandler(ILogger? logger) : DelegatingHandler
 		}
 		catch (ApiException apiException)
 		{
-			LogApiException(_logger, apiException, apiException.StatusCode, apiException.ReasonPhrase);
+			LogApiException(_logger, apiException.StatusCode, apiException.ReasonPhrase);
 
 			// Convert Refit ApiException to appropriate HaloApiException
 			var haloException = ConvertToHaloApiException(apiException, request);
 			throw haloException;
 		}
-		catch (HaloRequestNotSentException ex)
+		catch (HaloRequestNotSentException)
 		{
-			LogRequestNotSent(_logger, ex, request.RequestUri);
+			LogRequestNotSent(_logger, request.RequestUri);
 			throw;
 		}
 		catch (Exception ex)
 		{
-			LogUnexpectedError(_logger, ex, request.RequestUri);
+			LogRequestFailed(_logger, request.RequestUri, ex);
 			throw;
 		}
 	}
@@ -77,23 +78,23 @@ internal sealed class ErrorHandler(ILogger? logger) : DelegatingHandler
 	}
 
 	private static readonly Action<ILogger, System.Net.HttpStatusCode, string?, Exception?> _logApiException = LoggerMessage.Define<System.Net.HttpStatusCode, string?>(
-		LogLevel.Error, new EventId(1, nameof(LogApiException)),
+		LogLevel.Debug, new EventId(1, nameof(LogApiException)),
 		"API exception occurred: {StatusCode} {ReasonPhrase}");
 
-	private static readonly Action<ILogger, Uri?, Exception?> _logUnexpectedError = LoggerMessage.Define<Uri?>(
-		LogLevel.Error, new EventId(2, nameof(LogUnexpectedError)),
-		"Unexpected error occurred during HTTP request to {RequestUri}");
+	private static readonly Action<ILogger, Uri?, string, Exception?> _logRequestFailed = LoggerMessage.Define<Uri?, string>(
+		LogLevel.Debug, new EventId(2, nameof(LogRequestFailed)),
+		"HTTP request to {RequestUri} failed: {Reason}");
 
 	private static readonly Action<ILogger, Uri?, Exception?> _logRequestNotSent = LoggerMessage.Define<Uri?>(
-		LogLevel.Warning, new EventId(3, nameof(LogRequestNotSent)),
+		LogLevel.Debug, new EventId(3, nameof(LogRequestNotSent)),
 		"Request to {RequestUri} was not sent because the rate limiter gave up");
 
-	private static void LogRequestNotSent(ILogger logger, Exception ex, Uri? requestUri)
-		=> _logRequestNotSent(logger, requestUri, ex);
+	private static void LogRequestNotSent(ILogger logger, Uri? requestUri)
+		=> _logRequestNotSent(logger, requestUri, null);
 
-	private static void LogApiException(ILogger logger, Exception ex, System.Net.HttpStatusCode statusCode, string? reasonPhrase)
-		=> _logApiException(logger, statusCode, reasonPhrase, ex);
+	private static void LogApiException(ILogger logger, System.Net.HttpStatusCode statusCode, string? reasonPhrase)
+		=> _logApiException(logger, statusCode, reasonPhrase, null);
 
-	private static void LogUnexpectedError(ILogger logger, Exception ex, Uri? requestUri)
-		=> _logUnexpectedError(logger, requestUri, ex);
+	private static void LogRequestFailed(ILogger logger, Uri? requestUri, Exception ex)
+		=> _logRequestFailed(logger, requestUri, $"{ex.GetType().Name}: {ex.Message}", null);
 }

@@ -8,7 +8,7 @@ namespace HaloPsa.Api.Test.Infrastructure;
 public class ErrorHandlerTests
 {
 	[Fact]
-	public async Task RequestNotSent_IsLoggedBelowError_AndRethrownUnchanged()
+	public async Task RequestNotSent_IsLoggedAtDebugWithoutTheException_AndRethrownUnchanged()
 	{
 		var thrown = new HaloRequestNotSentException("Halo is busy");
 		var logger = new ListLogger();
@@ -20,8 +20,8 @@ public class ErrorHandlerTests
 
 		var caught = (await act.Should().ThrowAsync<HaloRequestNotSentException>()).Which;
 		_ = caught.Should().BeSameAs(thrown);
-		_ = logger.Levels.Should().ContainSingle().Which.Should().Be(LogLevel.Warning);
-		_ = logger.Levels.Should().NotContain(LogLevel.Error);
+		_ = logger.Levels.Should().ContainSingle().Which.Should().Be(LogLevel.Debug);
+		_ = logger.Exceptions.Should().ContainSingle().Which.Should().BeNull();
 	}
 
 	private sealed class ThrowingHandler(Exception exception) : HttpMessageHandler

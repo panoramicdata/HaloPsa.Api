@@ -143,7 +143,7 @@ public class RetryHandlerTests
 	[Theory]
 	[InlineData(true)]
 	[InlineData(false)]
-	public async Task RetriesExhausted_LogsOneWarningWithTheAttemptsMethodUriAndStatus(bool hasRateLimiter)
+	public async Task RetriesExhausted_LogsOneDebugEntryWithTheAttemptsMethodUriAndStatus(bool hasRateLimiter)
 	{
 		var stub = new SequencingHandler(HttpStatusCode.ServiceUnavailable, HttpStatusCode.ServiceUnavailable, HttpStatusCode.ServiceUnavailable);
 		var logger = new ListLogger();
@@ -152,7 +152,7 @@ public class RetryHandlerTests
 
 		_ = stub.CallCount.Should().Be(3);
 		_ = logger.Messages.Should().ContainSingle(message => message.Contains("failed after", StringComparison.Ordinal))
-			.Which.Should().Be($"Warning: HTTP request failed after 3 attempts for GET {_url} with status ServiceUnavailable");
+			.Which.Should().Be($"Debug: HTTP request failed after 3 attempts for GET {_url} with status ServiceUnavailable");
 	}
 
 	[Fact]
