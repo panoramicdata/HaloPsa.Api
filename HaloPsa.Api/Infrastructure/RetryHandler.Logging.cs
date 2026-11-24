@@ -23,7 +23,7 @@ internal sealed partial class RetryHandler
 
 	private void LogFinalFailure(HttpRequestMessage request, Exception ex)
 	{
-		if (_logger?.IsEnabled(LogLevel.Error) == true)
+		if (_logger?.IsEnabled(LogLevel.Debug) == true)
 		{
 			LogFinalFailureException(_logger, ex, _maxRetryAttempts + 1, request.Method, request.RequestUri);
 		}
@@ -41,17 +41,18 @@ internal sealed partial class RetryHandler
 		LogLevel.Information, new EventId(1, nameof(LogSuccessOnRetry)),
 		"HTTP request succeeded on attempt {Attempt} for {Method} {Uri}");
 
+	// Retries that end in failure reach the caller, so the outcome is logged at Debug and never with the exception (#96)
 	private static readonly Action<ILogger, int, HttpMethod, Uri?, HttpStatusCode, Exception?> _logFinalFailureStatus = LoggerMessage.Define<int, HttpMethod, Uri?, HttpStatusCode>(
-		LogLevel.Warning, new EventId(2, nameof(LogFinalFailureStatus)),
+		LogLevel.Debug, new EventId(2, nameof(LogFinalFailureStatus)),
 		"HTTP request failed after {MaxAttempts} attempts for {Method} {Uri} with status {StatusCode}");
 
 	private static readonly Action<ILogger, int, double, HttpMethod, Uri?, HttpStatusCode, Exception?> _logRetryAttemptStatus = LoggerMessage.Define<int, double, HttpMethod, Uri?, HttpStatusCode>(
 		LogLevel.Warning, new EventId(3, nameof(LogRetryAttemptStatus)),
 		"HTTP request failed on attempt {Attempt}, retrying in {Delay}ms for {Method} {Uri} (Status: {StatusCode})");
 
-	private static readonly Action<ILogger, int, HttpMethod, Uri?, Exception?> _logFinalFailureException = LoggerMessage.Define<int, HttpMethod, Uri?>(
-		LogLevel.Error, new EventId(4, nameof(LogFinalFailureException)),
-		"HTTP request failed after {MaxAttempts} attempts for {Method} {Uri}");
+	private static readonly Action<ILogger, int, HttpMethod, Uri?, string, Exception?> _logFinalFailureException = LoggerMessage.Define<int, HttpMethod, Uri?, string>(
+		LogLevel.Debug, new EventId(4, nameof(LogFinalFailureException)),
+		"HTTP request failed after {MaxAttempts} attempts for {Method} {Uri}: {Reason}");
 
 	private static readonly Action<ILogger, int, double, HttpMethod, Uri?, Exception?> _logRetryAfterException = LoggerMessage.Define<int, double, HttpMethod, Uri?>(
 		LogLevel.Warning, new EventId(5, nameof(LogRetryAfterException)),
@@ -67,7 +68,7 @@ internal sealed partial class RetryHandler
 		=> _logRetryAttemptStatus(logger, attempt, delay, method, uri, statusCode, null);
 
 	private static void LogFinalFailureException(ILogger logger, Exception ex, int maxAttempts, HttpMethod method, Uri? uri)
-		=> _logFinalFailureException(logger, maxAttempts, method, uri, ex);
+		=> _logFinalFailureException(logger, maxAttempts, method, uri, $"{ex.GetType().Name}: {ex.Message}", null);
 
 	private static void LogRetryAfterException(ILogger logger, Exception ex, int attempt, double delay, HttpMethod method, Uri? uri)
 		=> _logRetryAfterException(logger, attempt, delay, method, uri, ex);

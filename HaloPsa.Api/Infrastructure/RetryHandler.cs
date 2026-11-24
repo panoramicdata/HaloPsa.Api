@@ -67,7 +67,7 @@ internal sealed partial class RetryHandler(
 	{
 		var statusCode = response.StatusCode;
 
-		if (_logger?.IsEnabled(LogLevel.Warning) == true)
+		if (_logger?.IsEnabled(LogLevel.Debug) == true)
 		{
 			LogFinalFailureStatus(_logger, _maxRetryAttempts + 1, request.Method, request.RequestUri, statusCode);
 		}
