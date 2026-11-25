@@ -109,16 +109,22 @@ public record CreateTicketRequest : TicketRequestBase
 	public string? DetailsHtml { get; init; }
 
 	/// <summary>
-	/// The ID of the client this ticket belongs to (required)
+	/// The ID of the client this ticket belongs to. Optional when <see cref="TicketRequestBase.SiteId"/> or
+	/// <see cref="UserId"/> is set, since Halo then takes the client from the site or the user.
 	/// </summary>
 	[JsonPropertyName("client_id")]
-	public required int ClientId { get; init; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	public int? ClientId { get; init; }
 
 	/// <summary>
-	/// The ID of the user who reported this ticket (required)
+	/// The ID of the user who reported this ticket. Optional: without one, Halo uses the General User of the
+	/// ticket's site, or of the client's default site.
 	/// </summary>
+	/// <remarks>Halo files a ticket under its user's client and site, overriding <see cref="ClientId"/> and
+	/// <see cref="TicketRequestBase.SiteId"/>, so set a user only when they belong to that site.</remarks>
 	[JsonPropertyName("user_id")]
-	public required int UserId { get; init; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	public int? UserId { get; init; }
 
 	/// <summary>
 	/// When the ticket occurred (defaults to current time)

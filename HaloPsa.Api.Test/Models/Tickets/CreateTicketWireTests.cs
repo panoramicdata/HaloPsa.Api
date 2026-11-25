@@ -61,6 +61,53 @@ public class CreateTicketWireTests
 	}
 
 	[Fact]
+	public async Task CreateAsync_WithOnlyASite_SendsNoClientOrUser()
+	{
+		var (wrapper, handler) = Create(CreatedJson);
+		_ = await wrapper.CreateAsync(new CreateTicketRequest { Summary = "S", SiteId = 44 }, CancellationToken.None);
+
+		var ticket = SentBody(handler)[0];
+		AssertNames(ticket, "summary", "site_id");
+		AssertInts(ticket, ("site_id", 44));
+	}
+
+	[Fact]
+	public async Task CreateAsync_WithAClientAndSiteButNoUser_SendsNoUser()
+	{
+		var (wrapper, handler) = Create(CreatedJson);
+		_ = await wrapper.CreateAsync(new CreateTicketRequest { Summary = "S", ClientId = 21, SiteId = 44 }, CancellationToken.None);
+
+		AssertNames(SentBody(handler)[0], "summary", "client_id", "site_id");
+	}
+
+	[Fact]
+	public async Task CreateAsync_WithOnlyAClient_SendsNoUser()
+	{
+		var (wrapper, handler) = Create(CreatedJson);
+		_ = await wrapper.CreateAsync(new CreateTicketRequest { Summary = "S", ClientId = 21 }, CancellationToken.None);
+
+		AssertNames(SentBody(handler)[0], "summary", "client_id");
+	}
+
+	[Fact]
+	public async Task CreateAsync_WithOnlyAUser_SendsNoClient()
+	{
+		var (wrapper, handler) = Create(CreatedJson);
+		_ = await wrapper.CreateAsync(new CreateTicketRequest { Summary = "S", UserId = 9 }, CancellationToken.None);
+
+		AssertNames(SentBody(handler)[0], "summary", "user_id");
+	}
+
+	[Fact]
+	public async Task CreateAsync_WithNoClientSiteOrUser_RefusesBeforeSending()
+	{
+		var (wrapper, handler) = Create(CreatedJson);
+
+		await AssertRefusedBeforeSendingAsync<ArgumentException>(
+			handler, () => wrapper.CreateAsync(new CreateTicketRequest { Summary = "S" }, CancellationToken.None), "*ClientId, SiteId or UserId*");
+	}
+
+	[Fact]
 	public async Task CreateAsync_WithAList_SendsEveryRequestInOneArray()
 	{
 		var (wrapper, handler) = Create(CreatedJson);
