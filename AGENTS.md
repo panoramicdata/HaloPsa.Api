@@ -292,7 +292,7 @@ public async Task GetTickets_WithValidFilter_ReturnsFilteredResults()
 #### Before Implementing New Features
 1. **Review existing tests** to understand current patterns
 2. **Plan test coverage** for the new feature
-3. **Write failing tests first** (TDD approach when possible).
+3. **Write failing tests first** (a test-driven development approach).
 4. **Implement the feature** to make tests pass
 5. **Verify 100% test success rate** on all tests
 6. **Run full test suite** to ensure no regressions
