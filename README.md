@@ -412,7 +412,7 @@ We welcome contributions from the community! Here's how you can help:
 
 ### Coding Standards
 
-- **Follow the project's coding standards** as defined in `copilot-instructions.md`
+- **Follow the project's coding standards** as defined in `AGENTS.md`
 - **Use modern C# patterns** (primary constructors, collection expressions, etc.)
 - **Maintain zero warnings policy** - all code must compile without warnings
 - **Write comprehensive tests** - both unit and integration tests
