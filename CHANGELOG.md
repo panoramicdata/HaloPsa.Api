@@ -30,9 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Retry-After` given as an HTTP date is now read as well as delta seconds (`HaloRateLimitException.RetryAfterSeconds`).
 
 ### Changed
+- `CreateTicketRequest.ClientId` and `UserId` are now optional `int?`, left out of the request when null. Halo needs only one of a client, site or user: a site gives its client and its General User, and a client its default site and that site's General User. `CreateAsync` refuses a request with none of the three before sending anything. Code that reads either property as an `int` no longer compiles.
+- A ticket's user decides its client and site in Halo, overriding `ClientId` and `SiteId`, so leave `UserId` unset unless the user belongs to that site.
 - `CreateTicketRequest.CustomFields` is now `IReadOnlyList<CustomFieldInput>`, sent as `customfields: [{"id":...,"value":...}]`. Replace a dictionary keyed by field id with one `CustomFieldInput` per field.
 - `CreateTicketRequest.SuppressEmails` and `Notes` are obsolete and never sent: Halo's ticket create has no such fields.
-- `TicketsApiWrapper.CreateAsync` refuses a `ClientId` or `UserId` that is not positive, and a `SiteId` that is set but not positive, before sending anything. Halo rejects 0, and -1 is its 'not set' value.
+- `TicketsApiWrapper.CreateAsync` refuses a `ClientId`, `UserId` or `SiteId` that is set but not positive, before sending anything; -1 is Halo's 'not set' value.
 - `User.Username` is obsolete and returns `Login`: Halo's Users record has no `username` field, so it was never filled.
 - The token request now sends the same User-Agent as API requests; it previously sent none.
 - `ITicketsApi`, `IClientsApi` and `IUsersApi` gained members, which breaks a type outside the package that implements them.
